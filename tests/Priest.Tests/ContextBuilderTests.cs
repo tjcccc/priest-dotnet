@@ -1,13 +1,12 @@
 using Priest.Engine;
-using Priest.Profile;
+using Priest.Profiles;
 using Priest.Schema;
-using ProfileModel = Priest.Profile.Profile;
 
 namespace Priest.Tests;
 
 public class ContextBuilderTests
 {
-    private static readonly ProfileModel BaseProfile = new("test", "You are a test assistant.", "Be helpful.");
+    private static readonly Profile BaseProfile = new("test", "You are a test assistant.", "Be helpful.");
 
     [Fact]
     public void ProducesSystemAndUserMessages()
@@ -22,7 +21,7 @@ public class ContextBuilderTests
     [Fact]
     public void OmitsSystemMessageWhenProfileEmpty()
     {
-        var empty = new ProfileModel("e", "", "", new List<string>());
+        var empty = new Profile("e", "", "", new List<string>());
         var msgs = ContextBuilder.BuildMessages(empty, null, "Hi");
         Assert.Single(msgs);
         Assert.Equal("user", msgs[0].Role);
@@ -67,7 +66,7 @@ public class ContextBuilderTests
     [Fact]
     public void MemoriesBlockUsesCorrectHeaderAndSeparator()
     {
-        var profile = new ProfileModel("p", "id", "rules", new[] { "mem1", "mem2" });
+        var profile = new Profile("p", "id", "rules", new[] { "mem1", "mem2" });
         var msgs = ContextBuilder.BuildMessages(profile, null, "Hi");
         Assert.Contains("## Loaded Memories\n\nmem1\nmem2", msgs[0].Content);
     }

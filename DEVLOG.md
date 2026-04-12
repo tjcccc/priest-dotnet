@@ -20,8 +20,14 @@ Implements the priest protocol spec v1.0.0. Reference implementation: Python `pr
 
 **Runtime dependency:** `Microsoft.Data.Sqlite` (for `SqliteSessionStore`). All HTTP via `HttpClient`. All JSON via `System.Text.Json`.
 
-**Target framework:** net10.0
+**Target frameworks:** net8.0;net10.0
 
 **Test suite:** 30 unit tests (xUnit) — ContextBuilder (8), Engine (7), InMemorySessionStore (4), SqliteSessionStore (4), Streaming (4), and InMemory extras (3).
 
 **Spec version targeted:** 1.0.0 (asserted in `PriestEngine.SpecVersion`).
+
+## 2026-04-12 — v1.0.0 release
+
+- Multi-target: `net8.0;net10.0`
+- Namespace fix: `Priest.Profile` → `Priest.Profiles`, `Priest.Session` → `Priest.Sessions` (resolves class/namespace collision)
+- Added MIT LICENSE

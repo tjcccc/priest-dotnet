@@ -1,10 +1,9 @@
 using Priest.Engine;
 using Priest.Errors;
-using Priest.Profile;
+using Priest.Profiles;
 using Priest.Providers;
 using Priest.Schema;
-using Priest.Session;
-using ProfileModel = Priest.Profile.Profile;
+using Priest.Sessions;
 
 namespace Priest.Tests;
 
@@ -127,5 +126,5 @@ public class EngineTests
 
 public class StaticProfileLoader : IProfileLoader
 {
-    public ProfileModel Load(string name) => DefaultProfile.Instance;
+    public Profile Load(string name) => DefaultProfile.Instance;
 }

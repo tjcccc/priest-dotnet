@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace Priest.Session;
+namespace Priest.Sessions;
 
 public enum TurnRole { User, Assistant }
 

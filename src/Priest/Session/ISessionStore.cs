@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace Priest.Session;
+namespace Priest.Sessions;
 
 /// <summary>Contract for session persistence backends.</summary>
 public interface ISessionStore

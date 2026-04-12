@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using Priest.Errors;
 
-namespace Priest.Session;
+namespace Priest.Sessions;
 
 /// <summary>
 /// SQLite-backed session store.

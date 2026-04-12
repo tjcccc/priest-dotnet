@@ -1,11 +1,9 @@
 using System.Runtime.CompilerServices;
 using Priest.Errors;
-using Priest.Profile;
+using Priest.Profiles;
 using Priest.Providers;
 using Priest.Schema;
-using Priest.Session;
-using ProfileModel = Priest.Profile.Profile;
-using SessionModel = Priest.Session.Session;
+using Priest.Sessions;
 
 namespace Priest.Engine;
 
@@ -154,7 +152,7 @@ public class PriestEngine
         }
     }
 
-    private async Task<(SessionModel? session, bool isNew)> ResolveSessionAsync(
+    private async Task<(Session? session, bool isNew)> ResolveSessionAsync(
         PriestRequest request, CancellationToken ct)
     {
         if (request.Session is null || _sessionStore is null)

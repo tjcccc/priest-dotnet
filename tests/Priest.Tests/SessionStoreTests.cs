@@ -1,4 +1,4 @@
-using Priest.Session;
+using Priest.Sessions;
 
 namespace Priest.Tests;
 

@@ -1,8 +1,7 @@
+using Priest.Profiles;
 using Priest.Providers;
 using Priest.Schema;
-using Priest.Session;
-using ProfileModel = Priest.Profile.Profile;
-using SessionModel = Priest.Session.Session;
+using Priest.Sessions;
 
 namespace Priest.Engine;
 
@@ -27,8 +26,8 @@ public static class ContextBuilder
     private const string MemorySeparator   = "\n";
 
     public static IList<ChatMessage> BuildMessages(
-        ProfileModel profile,
-        SessionModel? session,
+        Profile profile,
+        Session? session,
         string prompt,
         IList<string>? systemContext = null,
         IList<string>? extraContext  = null,

@@ -1,7 +1,7 @@
 using Priest.Engine;
 using Priest.Providers;
 using Priest.Schema;
-using Priest.Session;
+using Priest.Sessions;
 
 namespace Priest.Tests;
 

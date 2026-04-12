@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Priest.Errors;
 
-namespace Priest.Profile;
+namespace Priest.Profiles;
 
 /// <summary>
 /// Loads profiles from JSON files in a directory.

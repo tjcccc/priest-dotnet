@@ -33,7 +33,7 @@ dotnet add package Priest
 
 ```csharp
 using Priest.Engine;
-using Priest.Profile;
+using Priest.Profiles;
 using Priest.Providers;
 using Priest.Schema;
 
@@ -91,7 +91,7 @@ var response = await engine.RunAsync(new PriestRequest(
 Pass a `Session` property to persist conversation history across calls.
 
 ```csharp
-using Priest.Session;
+using Priest.Sessions;
 
 using var store = new SqliteSessionStore("./sessions.db");
 store.Open();

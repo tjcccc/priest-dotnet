@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 
-namespace Priest.Session;
+namespace Priest.Sessions;
 
 /// <summary>In-memory session store. Data is lost when the process exits.</summary>
 public class InMemorySessionStore : ISessionStore

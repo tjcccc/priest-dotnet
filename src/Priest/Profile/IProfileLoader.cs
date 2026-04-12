@@ -1,4 +1,4 @@
-namespace Priest.Profile;
+namespace Priest.Profiles;
 
 /// <summary>Loads a named profile synchronously.</summary>
 public interface IProfileLoader

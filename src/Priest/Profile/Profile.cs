@@ -1,4 +1,4 @@
-namespace Priest.Profile;
+namespace Priest.Profiles;
 
 /// <summary>A loaded priest profile.</summary>
 public class Profile

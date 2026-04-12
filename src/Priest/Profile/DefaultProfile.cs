@@ -1,4 +1,4 @@
-namespace Priest.Profile;
+namespace Priest.Profiles;
 
 /// <summary>
 /// Built-in fallback profile.
