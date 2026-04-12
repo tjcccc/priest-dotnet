@@ -2,7 +2,7 @@
 
 C# / .NET SDK for the [priest](https://github.com/tjcccc/priest) AI orchestration protocol.
 
-.NET 10+ · C# · One dependency (`Microsoft.Data.Sqlite` for SQLite sessions)
+.NET 8+ · C# · One dependency (`Microsoft.Data.Sqlite` for SQLite sessions)
 
 ---
 
@@ -264,5 +264,5 @@ PriestEngine.SpecVersion  // "1.0.0"
 
 ## Requirements
 
-- .NET 10+
+- .NET 8+
 - `Microsoft.Data.Sqlite` is the only runtime dependency (required for `SqliteSessionStore`)
