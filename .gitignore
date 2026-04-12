@@ -1,5 +1,6 @@
 bin/
 obj/
+nupkg/
 *.user
 .DS_Store
 .env
