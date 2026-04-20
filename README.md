@@ -8,7 +8,7 @@ C# / .NET SDK for the [priest](https://github.com/tjcccc/priest) AI orchestratio
 
 ## Overview
 
-`Priest` is a .NET class library that implements the priest protocol spec v1.0.0 natively — no Python server, no FFI. It is designed for .NET backends, Unity games, Godot projects, and any C# host that needs to talk to a local or remote AI provider.
+`Priest` is a .NET class library that implements the priest protocol spec v2.0.0 natively — no Python server, no FFI. It is designed for .NET backends, Unity games, Godot projects, and any C# host that needs to talk to a local or remote AI provider.
 
 The core API is two methods on `PriestEngine`:
 
@@ -162,6 +162,33 @@ Profile format — `default.json`:
 
 ---
 
+## Memory and Context
+
+```csharp
+var response = await engine.RunAsync(new PriestRequest(config, "What should I work on today?")
+{
+    // Raw system context — injected first, never trimmed or deduped
+    Context = ["Today is Monday. App: ProjectManager"],
+
+    // Dynamic memory — deduped against profile memories and each other
+    Memory = ["User prefers bullet points.", "Active sprint: v3.0"],
+
+    // Per-turn user context — appended to the user message
+    UserContext = ["Recent tasks: [fix login bug, update README]"],
+});
+```
+
+When `MaxSystemChars` is set on the config, the engine trims `Memory` entries tail-first, then `profile.Memories` tail-first. `Context`, rules, identity, custom, and format instructions are never trimmed.
+
+```csharp
+var response = await engine.RunAsync(new PriestRequest(
+    new PriestConfig("ollama", "llama3.2") { MaxSystemChars = 4096 },
+    "Summarize my notes."
+) { Memory = longMemoryList });
+```
+
+---
+
 ## Output Format Hints
 
 ```csharp
@@ -254,10 +281,10 @@ public class MyProvider : IProviderAdapter
 
 ## Spec
 
-`Priest` targets priest protocol spec **v1.0.0**. The spec lives in the [`priest`](https://github.com/tjcccc/priest) repository under `spec/`.
+`Priest` targets priest protocol spec **v2.0.0**. The spec lives in the [`priest`](https://github.com/tjcccc/priest) repository under `spec/`.
 
 ```csharp
-PriestEngine.SpecVersion  // "1.0.0"
+PriestEngine.SpecVersion  // "2.0.0"
 ```
 
 ---
