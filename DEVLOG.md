@@ -31,3 +31,26 @@ Implements the priest protocol spec v1.0.0. Reference implementation: Python `pr
 - Multi-target: `net8.0;net10.0`
 - Namespace fix: `Priest.Profile` → `Priest.Profiles`, `Priest.Session` → `Priest.Sessions` (resolves class/namespace collision)
 - Added MIT LICENSE
+
+## 2026-04-20 — v2.0.0 — context API redesign, memory dedup/trim, profile cache
+
+Breaking changes matching priest core v2.0.0 spec.
+
+**Schema changes:**
+- `PriestRequest.SystemContext` → `Context` (raw system context, passed through untouched)
+- `PriestRequest.ExtraContext` → `UserContext` (appended to user turn)
+- `PriestRequest.Memory` added — dynamic memory entries, deduped and trimmable
+- `PriestConfig.MaxSystemChars` added — triggers tail-trim when set
+
+**Context assembly (`ContextBuilder.BuildMessages`):**
+- Dynamic memory rendered under `## Memory\n\n` heading (after `## Loaded Memories\n\n`)
+- Dedup: whitespace-stripped comparison; drops any `Memory` entry matching a profile memory or earlier dynamic entry
+- Trim: tail-first on `Memory`, then `profile.Memories`; `Context`/rules/identity/custom/format instructions never trimmed
+
+**Profile loader cache:**
+- `FilesystemProfileLoader` now caches loaded profiles per instance, keyed on `File.GetLastWriteTimeUtc`
+- Invalidates automatically when the file changes
+
+**Test suite:** 37 unit tests (up from 30). New tests cover memory block rendering, cross-source dedup, self-dedup, whitespace-stripped dedup, tail-trim, and no-trim guard.
+
+**Spec version:** `PriestEngine.SpecVersion` → `"2.0.0"`

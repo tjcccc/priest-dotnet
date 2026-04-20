@@ -20,6 +20,9 @@ public class PriestConfig
     /// <summary>Advisory cost ceiling in USD. The engine does NOT enforce this.</summary>
     public double? CostLimit { get; set; }
 
+    /// <summary>Budget for the assembled system prompt in characters. Triggers tail-trim of memory entries when exceeded.</summary>
+    public int? MaxSystemChars { get; set; }
+
     /// <summary>
     /// Provider-specific options merged directly into the request payload.
     /// Examples: { "think": false } for Ollama/Qwen3, { "temperature": 0.7 }.

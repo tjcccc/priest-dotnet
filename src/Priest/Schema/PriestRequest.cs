@@ -17,11 +17,14 @@ public class PriestRequest
     /// <summary>Session reference. If null, no session is created or continued.</summary>
     public SessionRef? Session { get; set; }
 
-    /// <summary>App-layer strings injected at the top of the system prompt.</summary>
-    public IList<string> SystemContext { get; set; } = Array.Empty<string>();
+    /// <summary>App-layer strings injected at the top of the system prompt. Raw, passed through untouched.</summary>
+    public IList<string> Context { get; set; } = Array.Empty<string>();
 
-    /// <summary>Additional strings appended to the user turn after the prompt.</summary>
-    public IList<string> ExtraContext { get; set; } = Array.Empty<string>();
+    /// <summary>Dynamic memory entries. Deduped against profile memories and each other. Subject to tail-trim.</summary>
+    public IList<string> Memory { get; set; } = Array.Empty<string>();
+
+    /// <summary>Strings appended to the user turn after the prompt, joined with \n\n.</summary>
+    public IList<string> UserContext { get; set; } = Array.Empty<string>();
 
     /// <summary>Output format hints.</summary>
     public OutputSpec Output { get; set; } = OutputSpec.None;

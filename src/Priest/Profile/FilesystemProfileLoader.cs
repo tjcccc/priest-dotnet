@@ -7,11 +7,14 @@ namespace Priest.Profiles;
 /// Loads profiles from JSON files in a directory.
 ///
 /// File layout: {baseDir}/{name}.json
+/// Caches loaded profiles per instance; invalidates when the file's last-write time changes.
 /// Falls back to the built-in default profile when the file is not found.
 /// </summary>
 public class FilesystemProfileLoader : IProfileLoader
 {
     private readonly string _baseDir;
+
+    private readonly Dictionary<string, (DateTime Mtime, Profile Profile)> _cache = new();
 
     public FilesystemProfileLoader(string baseDir)
     {
@@ -27,6 +30,10 @@ public class FilesystemProfileLoader : IProfileLoader
             throw PriestException.ProfileNotFound(name);
         }
 
+        var mtime = File.GetLastWriteTimeUtc(path);
+        if (_cache.TryGetValue(name, out var entry) && entry.Mtime == mtime)
+            return entry.Profile;
+
         var json = File.ReadAllText(path);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -40,6 +47,8 @@ public class FilesystemProfileLoader : IProfileLoader
             foreach (var m in mems.EnumerateArray())
                 if (m.GetString() is { } s) memories.Add(s);
 
-        return new Profile(name, identity, rules, memories, custom);
+        var profile = new Profile(name, identity, rules, memories, custom);
+        _cache[name] = (mtime, profile);
+        return profile;
     }
 }

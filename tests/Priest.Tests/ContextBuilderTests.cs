@@ -36,19 +36,19 @@ public class ContextBuilderTests
     }
 
     [Fact]
-    public void SystemContextInjectedBeforeRules()
+    public void ContextInjectedBeforeRules()
     {
         var msgs = ContextBuilder.BuildMessages(BaseProfile, null, "Hi",
-            systemContext: new[] { "Today is Monday." });
+            context: new[] { "Today is Monday." });
         var system = msgs[0].Content;
         Assert.True(system.IndexOf("Today is Monday.") < system.IndexOf("Be helpful."));
     }
 
     [Fact]
-    public void ExtraContextAppendedToUserTurn()
+    public void UserContextAppendedToUserTurn()
     {
         var msgs = ContextBuilder.BuildMessages(BaseProfile, null, "Summarize this",
-            extraContext: new[] { "Context: some document" });
+            userContext: new[] { "Context: some document" });
         Assert.Equal("Summarize this\n\nContext: some document", msgs[^1].Content);
     }
 
@@ -77,5 +77,87 @@ public class ContextBuilderTests
         Assert.Equal("You are a helpful, thoughtful assistant.\n", DefaultProfile.Instance.Identity);
         Assert.Equal("Be honest. Do not make things up.\nBe concise unless the user asks for depth.\n",
             DefaultProfile.Instance.Rules);
+    }
+
+    // v2.0.0 — dynamic memory block
+
+    [Fact]
+    public void DynamicMemoryRenderedUnderMemoryHeader()
+    {
+        var msgs = ContextBuilder.BuildMessages(BaseProfile, null, "Hi",
+            memory: new[] { "User prefers dark mode." });
+        Assert.Contains("## Memory\n\nUser prefers dark mode.", msgs[0].Content);
+    }
+
+    [Fact]
+    public void ProfileMemoriesBeforeDynamicMemory()
+    {
+        var profile = new Profile("p", "id", "rules", new[] { "Static fact." });
+        var msgs = ContextBuilder.BuildMessages(profile, null, "Hi",
+            memory: new[] { "Dynamic fact." });
+        var system = msgs[0].Content;
+        Assert.True(system.IndexOf("## Loaded Memories") < system.IndexOf("## Memory"));
+    }
+
+    // v2.0.0 — deduplication
+
+    [Fact]
+    public void DynamicMemoryDuplicatingProfileMemoryIsDropped()
+    {
+        var profile = new Profile("p", "id", "rules", new[] { "Fact A." });
+        var msgs = ContextBuilder.BuildMessages(profile, null, "Hi",
+            memory: new[] { "Fact A.", "Fact B." });
+        var system = msgs[0].Content;
+        var firstIdx = system.IndexOf("Fact A.");
+        var secondIdx = system.IndexOf("Fact A.", firstIdx + 1);
+        Assert.Equal(-1, secondIdx);
+        Assert.Contains("Fact B.", system);
+    }
+
+    [Fact]
+    public void DuplicateDynamicMemoryEntriesAreDropped()
+    {
+        var msgs = ContextBuilder.BuildMessages(BaseProfile, null, "Hi",
+            memory: new[] { "Note X.", "Note X." });
+        var system = msgs[0].Content;
+        var firstIdx = system.IndexOf("Note X.");
+        var secondIdx = system.IndexOf("Note X.", firstIdx + 1);
+        Assert.Equal(-1, secondIdx);
+    }
+
+    [Fact]
+    public void DeduplicationStripsWhitespace()
+    {
+        var profile = new Profile("p", "id", "rules", new[] { "Fact A." });
+        var msgs = ContextBuilder.BuildMessages(profile, null, "Hi",
+            memory: new[] { "  Fact A.  " });
+        var system = msgs[0].Content;
+        Assert.DoesNotContain("## Memory", system);
+    }
+
+    // v2.0.0 — trim
+
+    [Fact]
+    public void TrimsDynamicMemoryTailFirstWhenBudgetExceeded()
+    {
+        var profile = new Profile("p", "", "", new List<string>());
+        var msgs = ContextBuilder.BuildMessages(profile, null, "Hi",
+            memory: new[] { "Short.", new string('X', 500) },
+            maxSystemChars: 50);
+        var system = msgs[0].Content;
+        Assert.Contains("Short.", system);
+        Assert.DoesNotContain(new string('X', 500), system);
+    }
+
+    [Fact]
+    public void NoTrimWhenMaxSystemCharsNotSet()
+    {
+        var profile = new Profile("p", "", "", new List<string>());
+        var msgs = ContextBuilder.BuildMessages(profile, null, "Hi",
+            memory: new[] { "A.", "B.", "C." });
+        var system = msgs[0].Content;
+        Assert.Contains("A.", system);
+        Assert.Contains("B.", system);
+        Assert.Contains("C.", system);
     }
 }

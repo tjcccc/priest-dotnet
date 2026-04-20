@@ -17,7 +17,7 @@ namespace Priest.Engine;
 public class PriestEngine
 {
     /// <summary>Spec version this implementation targets.</summary>
-    public const string SpecVersion = "1.0.0";
+    public const string SpecVersion = "2.0.0";
 
     private readonly IProfileLoader _profileLoader;
     private readonly ISessionStore? _sessionStore;
@@ -51,7 +51,7 @@ public class PriestEngine
 
         var messages = ContextBuilder.BuildMessages(
             profile, session, request.Prompt,
-            request.SystemContext, request.ExtraContext, request.Output);
+            request.Context, request.Memory, request.UserContext, request.Output, request.Config.MaxSystemChars);
 
         string? text = null;
         string? finishReason = null;
@@ -135,7 +135,7 @@ public class PriestEngine
 
         var messages = ContextBuilder.BuildMessages(
             profile, session, request.Prompt,
-            request.SystemContext, request.ExtraContext, request.Output);
+            request.Context, request.Memory, request.UserContext, request.Output, request.Config.MaxSystemChars);
 
         var parts = new List<string>();
         await foreach (var chunk in adapter.StreamAsync(messages, request.Config, request.Output, ct))
