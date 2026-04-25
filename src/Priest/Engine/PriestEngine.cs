@@ -17,7 +17,7 @@ namespace Priest.Engine;
 public class PriestEngine
 {
     /// <summary>Spec version this implementation targets.</summary>
-    public const string SpecVersion = "2.0.0";
+    public const string SpecVersion = "2.2.0";
 
     private readonly IProfileLoader _profileLoader;
     private readonly ISessionStore? _sessionStore;

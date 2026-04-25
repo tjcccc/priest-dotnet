@@ -1,5 +1,17 @@
 # DEVLOG
 
+## 2026-04-25 — v2.2.0 — json_schema structured output
+
+Added `JsonSchema`, `JsonSchemaName`, and `JsonSchemaStrict` to `OutputSpec`.
+
+- **OpenAI-compat:** `response_format:{type:"json_schema", json_schema:{name, schema, strict}}` wired in `BuildBody`.
+- **Ollama (v0.5+):** `format:<schema_dict>` via `JsonSchema.DeepClone()`.
+- **Anthropic:** schema description injected into system message in `BuildBody`; `outputSpec` now threaded through `CompleteAsync` and `StreamAsync`.
+- `JsonSchema` takes precedence over `ProviderFormat` when both are set.
+- `PriestEngine.SpecVersion` → `"2.2.0"`
+
+---
+
 ## 2026-04-11 — Initial implementation
 
 First implementation of `priest-dotnet`, the C# / .NET SDK for the priest protocol.
