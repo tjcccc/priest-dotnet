@@ -202,7 +202,31 @@ var response = await engine.RunAsync(new PriestRequest(config, "List three plane
 });
 ```
 
-`ProviderFormat` activates the provider's native structured-output mode (e.g. Ollama `format` field, OpenAI `response_format`). `PromptFormat` injects a natural-language instruction into the system prompt — works with any provider.
+`ProviderFormat` activates the provider's native JSON mode. `PromptFormat` injects a natural-language instruction into the system prompt.
+
+For strict schema compliance, use `JsonSchema` instead:
+
+```csharp
+using System.Text.Json.Nodes;
+
+var response = await engine.RunAsync(new PriestRequest(config, "Give me a person object.")
+{
+    Output = new OutputSpec
+    {
+        JsonSchema = JsonNode.Parse("""
+            {
+              "type": "object",
+              "properties": { "name": { "type": "string" }, "age": { "type": "integer" } },
+              "required": ["name", "age"]
+            }
+            """),
+        JsonSchemaName   = "person",  // optional, defaults to "response"
+        JsonSchemaStrict = false,     // true requires additionalProperties:false on all objects
+    },
+});
+```
+
+`JsonSchema` maps to `response_format:{type:"json_schema"}` for OpenAI-compat, `format:<schema>` for Ollama (v0.5+), and system message injection for Anthropic. It takes precedence over `ProviderFormat` when both are set.
 
 `response.Text` is always the raw string. `Priest` never parses the output.
 

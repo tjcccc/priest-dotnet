@@ -37,7 +37,8 @@ public class OllamaProvider : IProviderAdapter
             ["messages"] = BuildMessages(messages),
             ["stream"]   = true,
         };
-        if (outputSpec?.ProviderFormat == Schema.ProviderFormat.Json) body["format"] = "json";
+        if (outputSpec?.JsonSchema is not null) body["format"] = outputSpec.JsonSchema.DeepClone();
+        else if (outputSpec?.ProviderFormat == Schema.ProviderFormat.Json) body["format"] = "json";
         if (config.MaxOutputTokens.HasValue)
             body["options"] = new JsonObject { ["num_predict"] = config.MaxOutputTokens.Value };
         foreach (var kv in config.ProviderOptions) body[kv.Key] = kv.Value?.DeepClone();

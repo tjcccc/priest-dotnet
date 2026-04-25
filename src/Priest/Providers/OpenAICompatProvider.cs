@@ -108,7 +108,18 @@ public class OpenAICompatProvider : IProviderAdapter
             ["messages"] = arr,
             ["stream"]   = stream,
         };
-        if (outputSpec?.ProviderFormat == Schema.ProviderFormat.Json)
+        if (outputSpec?.JsonSchema is not null)
+            body["response_format"] = new JsonObject
+            {
+                ["type"] = "json_schema",
+                ["json_schema"] = new JsonObject
+                {
+                    ["name"]   = outputSpec.JsonSchemaName,
+                    ["schema"] = outputSpec.JsonSchema.DeepClone(),
+                    ["strict"] = outputSpec.JsonSchemaStrict,
+                },
+            };
+        else if (outputSpec?.ProviderFormat == Schema.ProviderFormat.Json)
             body["response_format"] = new JsonObject { ["type"] = "json_object" };
         if (config.MaxOutputTokens.HasValue) body["max_tokens"] = config.MaxOutputTokens.Value;
         foreach (var kv in config.ProviderOptions) body[kv.Key] = kv.Value?.DeepClone();

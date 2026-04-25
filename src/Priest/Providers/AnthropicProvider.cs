@@ -25,7 +25,7 @@ public class AnthropicProvider : IProviderAdapter
         OutputSpec? outputSpec = null, CancellationToken ct = default)
     {
         var (system, chat) = SplitMessages(messages);
-        var body = BuildBody(config, chat, system, stream: false);
+        var body = BuildBody(config, chat, system, outputSpec, stream: false);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(config.Timeout);
 
@@ -62,7 +62,7 @@ public class AnthropicProvider : IProviderAdapter
         OutputSpec? outputSpec = null, [EnumeratorCancellation] CancellationToken ct = default)
     {
         var (system, chat) = SplitMessages(messages);
-        var body = BuildBody(config, chat, system, stream: true);
+        var body = BuildBody(config, chat, system, outputSpec, stream: true);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(config.Timeout);
 
@@ -114,11 +114,22 @@ public class AnthropicProvider : IProviderAdapter
         return (string.Join("\n\n", systemParts), chat);
     }
 
-    private static JsonObject BuildBody(PriestConfig config, List<ChatMessage> chat, string system, bool stream)
+    private static JsonObject BuildBody(PriestConfig config, List<ChatMessage> chat, string system,
+        OutputSpec? outputSpec, bool stream)
     {
         var arr = new JsonArray();
         foreach (var m in chat)
             arr.Add(new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
+
+        var systemText = system;
+        if (outputSpec?.JsonSchema is not null)
+        {
+            var instruction =
+                "Respond with a valid JSON object that conforms to the following JSON Schema:\n\n" +
+                $"<schema>\n{outputSpec.JsonSchema.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true })}\n</schema>\n\n" +
+                "Return only the JSON object — no explanation, no markdown fences.";
+            systemText = string.IsNullOrEmpty(systemText) ? instruction : $"{systemText}\n\n{instruction}";
+        }
 
         var body = new JsonObject
         {
@@ -127,7 +138,7 @@ public class AnthropicProvider : IProviderAdapter
             ["messages"]   = arr,
             ["stream"]     = stream,
         };
-        if (!string.IsNullOrEmpty(system)) body["system"] = system;
+        if (!string.IsNullOrEmpty(systemText)) body["system"] = systemText;
         foreach (var kv in config.ProviderOptions) body[kv.Key] = kv.Value?.DeepClone();
         return body;
     }
