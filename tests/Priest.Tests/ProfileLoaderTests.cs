@@ -33,6 +33,24 @@ public class ProfileLoaderTests : IDisposable
     }
 
     [Fact]
+    public void LoadsProfileMemoriesByDefault()
+    {
+        WriteProfile("bot", new { identity = "Bot.", rules = "", memories = new[] { "Remember me." } });
+        var loader = new FilesystemProfileLoader(_tmpDir);
+        var profile = loader.Load("bot");
+        Assert.Equal(new[] { "Remember me." }, profile.Memories);
+    }
+
+    [Fact]
+    public void CanDisableProfileMemoryLoading()
+    {
+        WriteProfile("bot", new { identity = "Bot.", rules = "", memories = new[] { "Remember me." } });
+        var loader = new FilesystemProfileLoader(_tmpDir, includeMemories: false);
+        var profile = loader.Load("bot");
+        Assert.Empty(profile.Memories);
+    }
+
+    [Fact]
     public void ReturnsDefaultProfileWhenNameIsDefaultAndFileMissing()
     {
         var loader = new FilesystemProfileLoader(_tmpDir);

@@ -8,7 +8,7 @@ C# / .NET SDK for the [priest](https://github.com/tjcccc/priest) AI orchestratio
 
 ## Overview
 
-`Priest` is a .NET class library that implements the priest protocol spec v2.2.0 natively — no Python server, no FFI. It is designed for .NET backends, Unity games, Godot projects, and any C# host that needs to talk to a local or remote AI provider.
+`Priest` is a .NET class library that implements the priest protocol spec v2.3.0 natively — no Python server, no FFI. It is designed for .NET backends, Unity games, Godot projects, and any C# host that needs to talk to a local or remote AI provider.
 
 The core API is two methods on `PriestEngine`:
 
@@ -149,6 +149,7 @@ var loader = new FilesystemProfileLoader("./profiles");
 ```
 
 Falls back to the built-in default profile when the named file is not found.
+Use `new FilesystemProfileLoader("./profiles", includeMemories: false)` when the host app owns memory selection and passes selected memory through `PriestRequest.Memory`.
 
 Profile format — `default.json`:
 
@@ -305,10 +306,10 @@ public class MyProvider : IProviderAdapter
 
 ## Spec
 
-`Priest` targets priest protocol spec **v2.2.0**. The spec lives in the [`priest`](https://github.com/tjcccc/priest) repository under `spec/`.
+`Priest` targets priest protocol spec **v2.3.0**. The spec lives in the [`priest`](https://github.com/tjcccc/priest) repository under `spec/`.
 
 ```csharp
-PriestEngine.SpecVersion  // "2.2.0"
+PriestEngine.SpecVersion  // "2.3.0"
 ```
 
 ---

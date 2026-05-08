@@ -1,5 +1,13 @@
 # DEVLOG
 
+## 2026-05-08 — v2.3.0 — optional profile memory loading
+
+- Added `FilesystemProfileLoader(baseDir, includeMemories: false)` so host apps can load profile identity/rules/custom fields without injecting profile memories
+- When memory loading is disabled, JSON profile `memories` arrays are ignored and callers can pass app-selected memory through `PriestRequest.Memory`
+- Updated `PriestEngine.SpecVersion` and package version to `2.3.0`
+
+---
+
 ## 2026-04-25 — v2.2.0 — json_schema structured output
 
 Added `JsonSchema`, `JsonSchemaName`, and `JsonSchemaStrict` to `OutputSpec`.

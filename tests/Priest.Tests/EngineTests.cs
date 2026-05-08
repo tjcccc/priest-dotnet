@@ -18,9 +18,9 @@ public class EngineTests
             new Dictionary<string, IProviderAdapter> { ["mock"] = new MockAdapter(responseText) });
 
     [Fact]
-    public void SpecVersionIs200()
+    public void SpecVersionIs230()
     {
-        Assert.Equal("2.0.0", PriestEngine.SpecVersion);
+        Assert.Equal("2.3.0", PriestEngine.SpecVersion);
     }
 
     [Fact]

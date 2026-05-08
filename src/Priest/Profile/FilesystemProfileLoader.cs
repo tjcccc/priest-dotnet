@@ -13,12 +13,14 @@ namespace Priest.Profiles;
 public class FilesystemProfileLoader : IProfileLoader
 {
     private readonly string _baseDir;
+    private readonly bool _includeMemories;
 
     private readonly Dictionary<string, (DateTime Mtime, Profile Profile)> _cache = new();
 
-    public FilesystemProfileLoader(string baseDir)
+    public FilesystemProfileLoader(string baseDir, bool includeMemories = true)
     {
         _baseDir = baseDir;
+        _includeMemories = includeMemories;
     }
 
     public Profile Load(string name)
@@ -43,7 +45,7 @@ public class FilesystemProfileLoader : IProfileLoader
         var custom   = root.TryGetProperty("custom",   out var c)  ? c.GetString()       : null;
 
         var memories = new List<string>();
-        if (root.TryGetProperty("memories", out var mems) && mems.ValueKind == JsonValueKind.Array)
+        if (_includeMemories && root.TryGetProperty("memories", out var mems) && mems.ValueKind == JsonValueKind.Array)
             foreach (var m in mems.EnumerateArray())
                 if (m.GetString() is { } s) memories.Add(s);
 
