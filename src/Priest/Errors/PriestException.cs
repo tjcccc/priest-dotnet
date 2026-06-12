@@ -12,6 +12,8 @@ public static class PriestErrorCode
     public const string ProviderError         = "PROVIDER_ERROR";
     public const string ProviderRateLimited   = "PROVIDER_RATE_LIMITED";
     public const string RequestInvalid        = "REQUEST_INVALID";
+    public const string RequestAborted        = "REQUEST_ABORTED";
+    public const string ImageLoadError        = "IMAGE_LOAD_ERROR";
     public const string InternalError         = "INTERNAL_ERROR";
 }
 
@@ -39,6 +41,10 @@ public class PriestException : Exception
     public static PriestException ProfileNotFound(string name) =>
         new(PriestErrorCode.ProfileNotFound, $"Profile '{name}' not found",
             new() { ["profile"] = name });
+
+    public static PriestException RequestAborted(string provider) =>
+        new(PriestErrorCode.RequestAborted, $"Request to provider '{provider}' was aborted by the caller",
+            new() { ["provider"] = provider });
 
     public static PriestException SessionNotFound(string sessionId) =>
         new(PriestErrorCode.SessionNotFound, $"Session '{sessionId}' not found",

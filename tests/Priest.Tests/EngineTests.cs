@@ -18,9 +18,9 @@ public class EngineTests
             new Dictionary<string, IProviderAdapter> { ["mock"] = new MockAdapter(responseText) });
 
     [Fact]
-    public void SpecVersionIs230()
+    public void SpecVersionIs240()
     {
-        Assert.Equal("2.3.0", PriestEngine.SpecVersion);
+        Assert.Equal("2.4.0", PriestEngine.SpecVersion);
     }
 
     [Fact]
@@ -111,11 +111,11 @@ public class EngineTests
     private class FailingAdapter : IProviderAdapter
     {
         public Task<AdapterResult> CompleteAsync(IList<ChatMessage> messages, PriestConfig config,
-            OutputSpec? outputSpec = null, CancellationToken ct = default)
+            OutputSpec? outputSpec = null, AdapterCallOptions? options = null, CancellationToken ct = default)
             => throw PriestException.ProviderError("mock", "network fail");
 
         public async IAsyncEnumerable<string> StreamAsync(IList<ChatMessage> messages, PriestConfig config,
-            OutputSpec? outputSpec = null,
+            OutputSpec? outputSpec = null, AdapterCallOptions? options = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
             await Task.CompletedTask;

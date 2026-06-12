@@ -17,7 +17,7 @@ namespace Priest.Engine;
 public class PriestEngine
 {
     /// <summary>Spec version this implementation targets.</summary>
-    public const string SpecVersion = "2.3.0";
+    public const string SpecVersion = "2.4.0";
 
     private readonly IProfileLoader _profileLoader;
     private readonly ISessionStore? _sessionStore;
@@ -51,20 +51,24 @@ public class PriestEngine
 
         var messages = ContextBuilder.BuildMessages(
             profile, session, request.Prompt,
-            request.Context, request.Memory, request.UserContext, request.Output, request.Config.MaxSystemChars);
+            request.Context, request.Memory, request.UserContext, request.Output, request.Config.MaxSystemChars,
+            request.ToolExchange);
 
         string? text = null;
+        IList<ToolCall>? toolCalls = null;
         string? finishReason = null;
         int? inputTokens = null, outputTokens = null;
         PriestErrorModel? errorModel = null;
 
         try
         {
-            var result = await adapter.CompleteAsync(messages, request.Config, request.Output, ct);
+            var result = await adapter.CompleteAsync(messages, request.Config, request.Output, CallOptions(request), ct);
             text         = result.Text;
+            toolCalls    = result.ToolCalls is { Count: > 0 } ? result.ToolCalls : null;
             finishReason = result.FinishReason;
             inputTokens  = result.InputTokens;
             outputTokens = result.OutputTokens;
+            if (toolCalls is not null) finishReason = "tool_calls";
         }
         catch (PriestException ex)
         {
@@ -80,76 +84,185 @@ public class PriestEngine
         SessionInfo? sessionInfo = null;
         if (session is not null && _sessionStore is not null && errorModel is null)
         {
-            session.AppendTurn(TurnRole.User, request.Prompt);
-            if (text is not null) session.AppendTurn(TurnRole.Assistant, text);
-            await _sessionStore.SaveAsync(session, ct);
+            // Tool-call iterations are turn-local: persist only when the model
+            // produced a final answer (spec behavior/tool-calling.md).
+            if (toolCalls is null)
+            {
+                session.AppendTurn(TurnRole.User, request.Prompt);
+                if (text is not null) session.AppendTurn(TurnRole.Assistant, text);
+                await _sessionStore.SaveAsync(session, ct);
+            }
             sessionInfo = new(session.Id, isNew, session.Turns.Count);
         }
 
         var latencyMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - startMs;
 
-        UsageInfo? usage = null;
-        if (inputTokens.HasValue || outputTokens.HasValue)
-        {
-            var total = (inputTokens ?? 0) + (outputTokens ?? 0);
-            usage = new(inputTokens, outputTokens, total > 0 ? total : null, null);
-        }
+        var usage = BuildUsage(inputTokens, outputTokens);
 
-        var finishedReason = finishReason switch
-        {
-            "stop"   => FinishedReason.Stop,
-            "length" => FinishedReason.Length,
-            "error"  => FinishedReason.Error,
-            not null => FinishedReason.Unknown,
-            _        => (FinishedReason?)null,
-        };
+        var finishedReason = MapFinishedReason(finishReason);
 
         return new PriestResponse(
             new ExecutionInfo(request.Config.Provider, request.Config.Model,
                 latencyMs, request.Profile, finishedReason),
             request.Metadata)
         {
-            Text    = text,
-            Usage   = usage,
-            Session = sessionInfo,
-            Error   = errorModel,
+            Text      = text,
+            ToolCalls = toolCalls,
+            Usage     = usage,
+            Session   = sessionInfo,
+            Error     = errorModel,
         };
     }
 
     /// <summary>
     /// Yield text chunks as they arrive from the provider.
     ///
-    /// Session is saved automatically after the stream completes.
-    /// Unlike RunAsync(), StreamAsync() yields only raw text chunks — no final
-    /// PriestResponse, no usage stats, no latency info.
+    /// Implemented as a filter over StreamEventsAsync(): text deltas pass
+    /// through, and a provider error in the terminal done event is re-thrown
+    /// as a PriestException (preserving the legacy contract). Use
+    /// StreamEventsAsync() for tool calls or structured metadata.
     /// </summary>
     public async IAsyncEnumerable<string> StreamAsync(
         PriestRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        await foreach (var ev in StreamEventsAsync(request, ct))
+        {
+            if (ev.Type == "text_delta" && ev.Text is not null)
+                yield return ev.Text;
+            else if (ev.Type == "done" && ev.Response?.Error is { } error)
+                throw new PriestException(error.Code, error.Message, error.Details);
+        }
+    }
+
+    /// <summary>
+    /// Yield structured streaming events (spec 2.4.0): text deltas, tool-call
+    /// progress, usage, and a terminal done event carrying the full
+    /// PriestResponse. Provider errors surface in done.Response.Error rather
+    /// than being thrown, matching RunAsync() semantics.
+    /// </summary>
+    public async IAsyncEnumerable<PriestStreamEvent> StreamEventsAsync(
+        PriestRequest request,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var startMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
         if (!_adapters.TryGetValue(request.Config.Provider, out var adapter))
             throw PriestException.ProviderNotRegistered(request.Config.Provider);
 
         var profile = _profileLoader.Load(request.Profile);
-        var (session, _) = await ResolveSessionAsync(request, ct);
+        var (session, isNew) = await ResolveSessionAsync(request, ct);
 
         var messages = ContextBuilder.BuildMessages(
             profile, session, request.Prompt,
-            request.Context, request.Memory, request.UserContext, request.Output, request.Config.MaxSystemChars);
+            request.Context, request.Memory, request.UserContext, request.Output, request.Config.MaxSystemChars,
+            request.ToolExchange);
 
-        var parts = new List<string>();
-        await foreach (var chunk in adapter.StreamAsync(messages, request.Config, request.Output, ct))
+        var textParts = new List<string>();
+        var toolCalls = new List<ToolCall>();
+        string? finishReason = null;
+        int? inputTokens = null, outputTokens = null;
+        PriestErrorModel? errorModel = null;
+
+        var source = adapter.StreamEventsAsync(messages, request.Config, request.Output, CallOptions(request), ct);
+        await using var enumerator = source.GetAsyncEnumerator(ct);
+        while (true)
         {
-            parts.Add(chunk);
-            yield return chunk;
+            AdapterStreamEvent? ev = null;
+            try
+            {
+                if (!await enumerator.MoveNextAsync()) break;
+                ev = enumerator.Current;
+            }
+            catch (PriestException ex)
+            {
+                finishReason = "error";
+                errorModel = new(ex.Code, ex.Message, ex.Details);
+                break;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                finishReason = "error";
+                errorModel = new(PriestErrorCode.InternalError, ex.Message, new());
+                break;
+            }
+
+            switch (ev.Type)
+            {
+                case "text_delta" when ev.Text is not null:
+                    textParts.Add(ev.Text);
+                    yield return new PriestStreamEvent("text_delta") { Text = ev.Text };
+                    break;
+                case "tool_call_start":
+                    yield return new PriestStreamEvent("tool_call_start") { Index = ev.Index, Id = ev.Id, Name = ev.Name };
+                    break;
+                case "tool_call_delta":
+                    yield return new PriestStreamEvent("tool_call_delta") { Index = ev.Index, ArgumentsDelta = ev.ArgumentsDelta };
+                    break;
+                case "tool_call_end" when ev.ToolCall is not null:
+                    toolCalls.Add(ev.ToolCall);
+                    yield return new PriestStreamEvent("tool_call_end") { Index = ev.Index, ToolCall = ev.ToolCall };
+                    break;
+                case "usage":
+                    inputTokens = ev.InputTokens ?? inputTokens;
+                    outputTokens = ev.OutputTokens ?? outputTokens;
+                    yield return new PriestStreamEvent("usage") { Usage = BuildUsage(inputTokens, outputTokens) };
+                    break;
+                case "finish":
+                    finishReason = ev.FinishReason ?? finishReason;
+                    break;
+            }
         }
 
-        if (session is not null && _sessionStore is not null && parts.Count > 0)
+        var text = textParts.Count > 0 ? string.Concat(textParts) : null;
+        if (toolCalls.Count > 0 && finishReason != "error") finishReason = "tool_calls";
+
+        SessionInfo? sessionInfo = null;
+        if (session is not null && _sessionStore is not null && errorModel is null)
         {
-            session.AppendTurn(TurnRole.User, request.Prompt);
-            session.AppendTurn(TurnRole.Assistant, string.Concat(parts));
-            await _sessionStore.SaveAsync(session, ct);
+            if (toolCalls.Count == 0 && text is not null)
+            {
+                session.AppendTurn(TurnRole.User, request.Prompt);
+                session.AppendTurn(TurnRole.Assistant, text);
+                await _sessionStore.SaveAsync(session, ct);
+            }
+            sessionInfo = new(session.Id, isNew, session.Turns.Count);
         }
+
+        var response = new PriestResponse(
+            new ExecutionInfo(request.Config.Provider, request.Config.Model,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - startMs, request.Profile,
+                MapFinishedReason(finishReason)),
+            request.Metadata)
+        {
+            Text      = text,
+            ToolCalls = toolCalls.Count > 0 ? toolCalls : null,
+            Usage     = BuildUsage(inputTokens, outputTokens),
+            Session   = sessionInfo,
+            Error     = errorModel,
+        };
+
+        yield return new PriestStreamEvent("done") { Response = response };
+    }
+
+    private static AdapterCallOptions? CallOptions(PriestRequest request)
+        => request.Tools.Count > 0 ? new AdapterCallOptions(request.Tools, request.ToolChoice) : null;
+
+    private static FinishedReason? MapFinishedReason(string? finishReason) => finishReason switch
+    {
+        "stop"       => FinishedReason.Stop,
+        "length"     => FinishedReason.Length,
+        "tool_calls" => FinishedReason.ToolCalls,
+        "error"      => FinishedReason.Error,
+        not null     => FinishedReason.Unknown,
+        _            => null,
+    };
+
+    private static UsageInfo? BuildUsage(int? inputTokens, int? outputTokens)
+    {
+        if (!inputTokens.HasValue && !outputTokens.HasValue) return null;
+        var total = (inputTokens ?? 0) + (outputTokens ?? 0);
+        return new(inputTokens, outputTokens, total > 0 ? total : null, null);
     }
 
     private async Task<(Session? session, bool isNew)> ResolveSessionAsync(

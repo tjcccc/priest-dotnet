@@ -34,7 +34,8 @@ public static class ContextBuilder
         IList<string>? memory       = null,
         IList<string>? userContext  = null,
         OutputSpec?    outputSpec   = null,
-        int?           maxSystemChars = null)
+        int?           maxSystemChars = null,
+        IList<ToolExchangeTurn>? toolExchange = null)
     {
         // Step 1 — normalize profile memories
         var profileMemories = profile.Memories
@@ -93,6 +94,25 @@ public static class ContextBuilder
                 if (!string.IsNullOrWhiteSpace(ctx)) userParts.Add(ctx);
 
         messages.Add(new ChatMessage("user", string.Join(SectionSeparator, userParts)));
+
+        // Tool loop history for the current turn (spec 2.4.0). Appended after
+        // the user message, never persisted in sessions.
+        if (toolExchange is not null)
+        {
+            foreach (var turn in toolExchange)
+            {
+                switch (turn)
+                {
+                    case AssistantToolTurn assistant:
+                        messages.Add(new ChatMessage("assistant", assistant.Text ?? "", ToolCalls: assistant.ToolCalls));
+                        break;
+                    case ToolResultTurn result:
+                        messages.Add(new ChatMessage("tool", result.Content, ToolCallId: result.ToolCallId, Name: result.Name));
+                        break;
+                }
+            }
+        }
+
         return messages;
     }
 

@@ -32,6 +32,18 @@ public class PriestRequest
     /// <summary>Arbitrary caller metadata. Echoed unchanged into PriestResponse.Metadata.</summary>
     public Dictionary<string, JsonNode?> Metadata { get; set; } = new();
 
+    /// <summary>Tools the model may call. The caller executes them; the library transports.</summary>
+    public IList<ToolDefinition> Tools { get; set; } = Array.Empty<ToolDefinition>();
+
+    /// <summary>Tool selection behavior. Only meaningful when Tools is non-empty.</summary>
+    public ToolChoice? ToolChoice { get; set; }
+
+    /// <summary>
+    /// Tool loop history for the CURRENT user turn, appended after the user
+    /// message. Never persisted in sessions. See spec behavior/tool-calling.md.
+    /// </summary>
+    public IList<ToolExchangeTurn> ToolExchange { get; set; } = Array.Empty<ToolExchangeTurn>();
+
     public PriestRequest(PriestConfig config, string prompt)
     {
         Config = config;

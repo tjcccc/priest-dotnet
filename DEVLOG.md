@@ -1,5 +1,21 @@
 # DEVLOG
 
+## 2026-06-12 — v2.4.0 — tool calling, structured streaming (spec 2.4.0 sync)
+
+Syncs the spec 2.4.0 features (reference: priest-typescript / Python priest-core 2.4.0).
+
+- **Tool calling (caller executes):** `PriestRequest.Tools` / `ToolChoice` / `ToolExchange`, `PriestResponse.ToolCalls`, `FinishedReason.ToolCalls`. Wire mappings for all three providers (OpenAI tools with JSON-string arguments, Anthropic tool_use/tool_result with merged user messages, Ollama tools with synthesized `call_N` ids and `tool_name` results). Tool exchange turns are never persisted in sessions.
+- **`ToolLoop.RunWithToolsAsync()`:** generic call → execute → re-call loop with caller executor, optional approval hook, iteration cap, and exchange trace.
+- **`PriestEngine.StreamEventsAsync()`:** structured streaming (`text_delta`, `tool_call_start/delta/end`, `usage`, `done` with full `PriestResponse`); adapters without native event streaming fall back via the default interface method; `StreamAsync()` reimplemented as a filter over it.
+- **Cancellation:** the existing `CancellationToken` parameters map to the spec's cancellation concept; caller-initiated cancellation now surfaces as `REQUEST_ABORTED`, distinct from `PROVIDER_TIMEOUT`. `IMAGE_LOAD_ERROR` code added for table parity.
+- Ollama `CompleteAsync` is now a real non-streaming call (reports usage and `done_reason`).
+- Anthropic default `max_tokens` corrected to the spec-defined 8096 (was 1024).
+- `PriestEngine.SpecVersion` → "2.4.0". Tests: 51 (7 new).
+
+Known gap: multimodal `ImageInput` (spec 2.0) is still not implemented in this SDK.
+
+---
+
 ## 2026-05-08 — v2.3.0 — optional profile memory loading
 
 - Added `FilesystemProfileLoader(baseDir, includeMemories: false)` so host apps can load profile identity/rules/custom fields without injecting profile memories

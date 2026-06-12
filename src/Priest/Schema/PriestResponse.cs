@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 namespace Priest.Schema;
 
-public enum FinishedReason { Stop, Length, Error, Unknown }
+public enum FinishedReason { Stop, Length, ToolCalls, Error, Unknown }
 
 /// <summary>Execution metadata for a completed run.</summary>
 public record ExecutionInfo(
@@ -40,6 +40,13 @@ public class PriestResponse
 {
     /// <summary>Raw text returned by the provider. Null on error or no content.</summary>
     public string? Text { get; init; }
+
+    /// <summary>
+    /// Tool calls requested by the model. Non-null exactly when
+    /// Execution.FinishedReason is ToolCalls. The caller executes them and
+    /// re-runs with the results appended to PriestRequest.ToolExchange.
+    /// </summary>
+    public IList<ToolCall>? ToolCalls { get; init; }
 
     public ExecutionInfo Execution { get; init; }
     public UsageInfo? Usage { get; init; }
