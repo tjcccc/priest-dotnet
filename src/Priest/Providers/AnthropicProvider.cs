@@ -62,9 +62,10 @@ public class AnthropicProvider : IProviderAdapter
         var finish  = node?["stop_reason"]?.GetValue<string>();
         var inToks  = node?["usage"]?["input_tokens"]?.GetValue<int>();
         var outToks = node?["usage"]?["output_tokens"]?.GetValue<int>();
+        var cachedToks = node?["usage"]?["cache_read_input_tokens"]?.GetValue<int>();
         return new AdapterResult(text,
             toolCalls is not null ? "tool_calls" : MapStopReason(finish),
-            inToks, outToks, toolCalls);
+            inToks, outToks, cachedToks, toolCalls);
     }
 
     public async IAsyncEnumerable<string> StreamAsync(IList<ChatMessage> messages, PriestConfig config,
@@ -113,7 +114,7 @@ public class AnthropicProvider : IProviderAdapter
         var toolBlocks = new Dictionary<int, ToolBlockState>();
         var toolCount = 0;
         string? stopReason = null;
-        int? inputTokens = null, outputTokens = null;
+        int? inputTokens = null, outputTokens = null, cachedInputTokens = null;
 
         string? line;
         while ((line = await reader.ReadLineAsync(ct)) is not null)
@@ -126,6 +127,7 @@ public class AnthropicProvider : IProviderAdapter
             {
                 case "message_start":
                     inputTokens = node?["message"]?["usage"]?["input_tokens"]?.GetValue<int>() ?? inputTokens;
+                    cachedInputTokens = node?["message"]?["usage"]?["cache_read_input_tokens"]?.GetValue<int>() ?? cachedInputTokens;
                     break;
                 case "content_block_start":
                 {
@@ -187,7 +189,7 @@ public class AnthropicProvider : IProviderAdapter
         }
 
         if (inputTokens.HasValue || outputTokens.HasValue)
-            yield return new AdapterStreamEvent("usage") { InputTokens = inputTokens, OutputTokens = outputTokens };
+            yield return new AdapterStreamEvent("usage") { InputTokens = inputTokens, OutputTokens = outputTokens, CachedInputTokens = cachedInputTokens };
         yield return new AdapterStreamEvent("finish")
         {
             FinishReason = toolCount > 0 ? "tool_calls" : MapStopReason(stopReason),

@@ -8,4 +8,5 @@ public record AdapterResult(
     string? FinishReason = null,
     int? InputTokens = null,
     int? OutputTokens = null,
+    int? CachedInputTokens = null,
     IList<ToolCall>? ToolCalls = null);

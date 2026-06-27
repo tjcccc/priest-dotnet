@@ -1,5 +1,16 @@
 # DEVLOG
 
+## 2026-06-27 — v2.6.1 — full spec sync (compaction, turn window, cached tokens, streaming usage)
+
+Brings Priest to full parity with the spec at v2.6.1 (2.5.0 → 2.6.0 → 2.6.1), mirroring the priest-core/priest-typescript reference. All additions are off/opt-in by default; the SQLite schema is unchanged, so pre-2.5 sessions remain interoperable.
+
+- **Cached input tokens (spec 2.5.0):** `AdapterResult.CachedInputTokens` / `UsageInfo.CachedInputTokens` and the `usage` stream event. Parsed from OpenAI-compat `usage.prompt_tokens_details.cached_tokens` and Anthropic `usage.cache_read_input_tokens` (complete + stream). Null when omitted.
+- **Conversation compaction (spec 2.5.0):** new `Engine/Compactor.cs` (`ShouldCompact`, `PlanCompaction`, `BuildSummaryMessages`; ratio 0.8, default keep 6, summary cap 1024). `PriestConfig.MaxContextTokens` enables it; a chat turn crossing 80% of the budget folds older turns into a running summary and replays only `summary + recent tail`. State persists in session `Metadata["__compaction"]` with **camelCase keys** (cross-SDK contract, `Session.cs`). `engine.CompactSessionAsync()` for a manual `/compact`; trigger measured on clean chat turns only (tool-exchange replays skipped).
+- **Session turn window (spec 2.6.0):** `PriestConfig.SessionContextTurns` caps replayed turns; the context builder windows from `Max(SummarizedThrough, Count-N)` and snaps an odd window down to a user turn.
+- **OpenAI-compat streaming usage (spec 2.6.1):** streaming requests send `stream_options: {include_usage: true}` (overridable via `ProviderOptions`). `BuildBody` is `internal` (`InternalsVisibleTo`) for direct wire assertions.
+- `SpecVersion` → "2.6.1"; csproj + README spec references bumped to v2.6.1 (README was previously stale at v2.3.0).
+- Tests: `tests/Priest.Tests/CompactionTests.cs` (18 — incl. a SQLite round-trip asserting the persisted `__compaction` camelCase bytes) plus the existing wire tests. `dotnet test` green (71 total).
+
 ## 2026-06-12 — v2.4.0 — tool calling, structured streaming (spec 2.4.0 sync)
 
 Syncs the spec 2.4.0 features (reference: priest-typescript / Python priest-core 2.4.0).

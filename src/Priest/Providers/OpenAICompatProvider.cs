@@ -57,9 +57,10 @@ public class OpenAICompatProvider : IProviderAdapter
         var finish  = node?["choices"]?[0]?["finish_reason"]?.GetValue<string>();
         var inToks  = node?["usage"]?["prompt_tokens"]?.GetValue<int>();
         var outToks = node?["usage"]?["completion_tokens"]?.GetValue<int>();
+        var cachedToks = node?["usage"]?["prompt_tokens_details"]?["cached_tokens"]?.GetValue<int>();
         return new AdapterResult(text,
             toolCalls is not null ? "tool_calls" : MapFinishReason(finish),
-            inToks, outToks, toolCalls);
+            inToks, outToks, cachedToks, toolCalls);
     }
 
     public async IAsyncEnumerable<string> StreamAsync(IList<ChatMessage> messages, PriestConfig config,
@@ -106,7 +107,7 @@ public class OpenAICompatProvider : IProviderAdapter
         // Tool-call fragments accumulate per provider index until the stream ends.
         var partials = new SortedDictionary<int, PartialToolCall>();
         string? finishReason = null;
-        int? inputTokens = null, outputTokens = null;
+        int? inputTokens = null, outputTokens = null, cachedInputTokens = null;
 
         string? line;
         while ((line = await reader.ReadLineAsync(ct)) is not null)
@@ -119,6 +120,7 @@ public class OpenAICompatProvider : IProviderAdapter
 
             inputTokens = node?["usage"]?["prompt_tokens"]?.GetValue<int>() ?? inputTokens;
             outputTokens = node?["usage"]?["completion_tokens"]?.GetValue<int>() ?? outputTokens;
+            cachedInputTokens = node?["usage"]?["prompt_tokens_details"]?["cached_tokens"]?.GetValue<int>() ?? cachedInputTokens;
 
             var choice = node?["choices"]?[0];
             if (choice is null) continue;
@@ -162,7 +164,7 @@ public class OpenAICompatProvider : IProviderAdapter
             };
         }
         if (inputTokens.HasValue || outputTokens.HasValue)
-            yield return new AdapterStreamEvent("usage") { InputTokens = inputTokens, OutputTokens = outputTokens };
+            yield return new AdapterStreamEvent("usage") { InputTokens = inputTokens, OutputTokens = outputTokens, CachedInputTokens = cachedInputTokens };
         yield return new AdapterStreamEvent("finish")
         {
             FinishReason = partials.Count > 0 ? "tool_calls" : MapFinishReason(finishReason) ?? "stop",
@@ -176,7 +178,7 @@ public class OpenAICompatProvider : IProviderAdapter
         public readonly StringBuilder Args = new();
     }
 
-    private static JsonObject BuildBody(IList<ChatMessage> messages, PriestConfig config,
+    internal static JsonObject BuildBody(IList<ChatMessage> messages, PriestConfig config,
         OutputSpec? outputSpec, AdapterCallOptions? options, bool stream)
     {
         var arr = new JsonArray();
@@ -219,6 +221,12 @@ public class OpenAICompatProvider : IProviderAdapter
             ["messages"] = arr,
             ["stream"]   = stream,
         };
+        // Streaming usage is opt-in: without this, OpenAI-compatible gateways
+        // (e.g. DashScope) emit a usage chunk only for models that volunteer it,
+        // so cost/context goes missing for the rest. ProviderOptions below can
+        // still override it.
+        if (stream)
+            body["stream_options"] = new JsonObject { ["include_usage"] = true };
         if (outputSpec?.JsonSchema is not null)
             body["response_format"] = new JsonObject
             {

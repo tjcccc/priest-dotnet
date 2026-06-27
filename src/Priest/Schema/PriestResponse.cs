@@ -17,6 +17,7 @@ public record UsageInfo(
     int? InputTokens,
     int? OutputTokens,
     int? TotalTokens,
+    int? CachedInputTokens,
     double? EstimatedCostUsd);
 
 /// <summary>Session state after a run.</summary>

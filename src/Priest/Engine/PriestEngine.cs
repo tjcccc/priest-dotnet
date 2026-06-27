@@ -17,7 +17,7 @@ namespace Priest.Engine;
 public class PriestEngine
 {
     /// <summary>Spec version this implementation targets.</summary>
-    public const string SpecVersion = "2.4.0";
+    public const string SpecVersion = "2.6.1";
 
     private readonly IProfileLoader _profileLoader;
     private readonly ISessionStore? _sessionStore;
@@ -49,15 +49,18 @@ public class PriestEngine
         var profile = _profileLoader.Load(request.Profile);
         var (session, isNew) = await ResolveSessionAsync(request, ct);
 
+        // Compaction (spec 2.5.0): fold older turns before building messages.
+        if (session is not null) await MaybeCompactAsync(session, request.Config, ct);
+
         var messages = ContextBuilder.BuildMessages(
             profile, session, request.Prompt,
             request.Context, request.Memory, request.UserContext, request.Output, request.Config.MaxSystemChars,
-            request.ToolExchange);
+            request.ToolExchange, request.Config.SessionContextTurns);
 
         string? text = null;
         IList<ToolCall>? toolCalls = null;
         string? finishReason = null;
-        int? inputTokens = null, outputTokens = null;
+        int? inputTokens = null, outputTokens = null, cachedInputTokens = null;
         PriestErrorModel? errorModel = null;
 
         try
@@ -68,6 +71,7 @@ public class PriestEngine
             finishReason = result.FinishReason;
             inputTokens  = result.InputTokens;
             outputTokens = result.OutputTokens;
+            cachedInputTokens = result.CachedInputTokens;
             if (toolCalls is not null) finishReason = "tool_calls";
         }
         catch (PriestException ex)
@@ -90,6 +94,7 @@ public class PriestEngine
             {
                 session.AppendTurn(TurnRole.User, request.Prompt);
                 if (text is not null) session.AppendTurn(TurnRole.Assistant, text);
+                RecordChatUsage(session, request, inputTokens);
                 await _sessionStore.SaveAsync(session, ct);
             }
             sessionInfo = new(session.Id, isNew, session.Turns.Count);
@@ -97,7 +102,7 @@ public class PriestEngine
 
         var latencyMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - startMs;
 
-        var usage = BuildUsage(inputTokens, outputTokens);
+        var usage = BuildUsage(inputTokens, outputTokens, cachedInputTokens);
 
         var finishedReason = MapFinishedReason(finishReason);
 
@@ -153,15 +158,17 @@ public class PriestEngine
         var profile = _profileLoader.Load(request.Profile);
         var (session, isNew) = await ResolveSessionAsync(request, ct);
 
+        if (session is not null) await MaybeCompactAsync(session, request.Config, ct);
+
         var messages = ContextBuilder.BuildMessages(
             profile, session, request.Prompt,
             request.Context, request.Memory, request.UserContext, request.Output, request.Config.MaxSystemChars,
-            request.ToolExchange);
+            request.ToolExchange, request.Config.SessionContextTurns);
 
         var textParts = new List<string>();
         var toolCalls = new List<ToolCall>();
         string? finishReason = null;
-        int? inputTokens = null, outputTokens = null;
+        int? inputTokens = null, outputTokens = null, cachedInputTokens = null;
         PriestErrorModel? errorModel = null;
 
         var source = adapter.StreamEventsAsync(messages, request.Config, request.Output, CallOptions(request), ct);
@@ -206,7 +213,8 @@ public class PriestEngine
                 case "usage":
                     inputTokens = ev.InputTokens ?? inputTokens;
                     outputTokens = ev.OutputTokens ?? outputTokens;
-                    yield return new PriestStreamEvent("usage") { Usage = BuildUsage(inputTokens, outputTokens) };
+                    cachedInputTokens = ev.CachedInputTokens ?? cachedInputTokens;
+                    yield return new PriestStreamEvent("usage") { Usage = BuildUsage(inputTokens, outputTokens, cachedInputTokens) };
                     break;
                 case "finish":
                     finishReason = ev.FinishReason ?? finishReason;
@@ -224,6 +232,7 @@ public class PriestEngine
             {
                 session.AppendTurn(TurnRole.User, request.Prompt);
                 session.AppendTurn(TurnRole.Assistant, text);
+                RecordChatUsage(session, request, inputTokens);
                 await _sessionStore.SaveAsync(session, ct);
             }
             sessionInfo = new(session.Id, isNew, session.Turns.Count);
@@ -237,7 +246,7 @@ public class PriestEngine
         {
             Text      = text,
             ToolCalls = toolCalls.Count > 0 ? toolCalls : null,
-            Usage     = BuildUsage(inputTokens, outputTokens),
+            Usage     = BuildUsage(inputTokens, outputTokens, cachedInputTokens),
             Session   = sessionInfo,
             Error     = errorModel,
         };
@@ -258,11 +267,74 @@ public class PriestEngine
         _            => null,
     };
 
-    private static UsageInfo? BuildUsage(int? inputTokens, int? outputTokens)
+    private static UsageInfo? BuildUsage(int? inputTokens, int? outputTokens, int? cachedInputTokens = null)
     {
         if (!inputTokens.HasValue && !outputTokens.HasValue) return null;
         var total = (inputTokens ?? 0) + (outputTokens ?? 0);
-        return new(inputTokens, outputTokens, total > 0 ? total : null, null);
+        return new(inputTokens, outputTokens, total > 0 ? total : null, cachedInputTokens, null);
+    }
+
+    // ---- Conversation compaction (spec 2.5.0) ----
+
+    /// <summary>
+    /// Compact a session on demand: fold older turns into the running summary,
+    /// keeping the most recent CompactionKeepTurns. Returns whether anything was
+    /// folded and the new coverage point. Throws SESSION_NOT_FOUND for unknown ids.
+    /// </summary>
+    public async Task<(bool Compacted, int SummarizedThrough)> CompactSessionAsync(
+        string sessionId, PriestConfig config, CancellationToken ct = default)
+    {
+        if (_sessionStore is null) return (false, 0);
+        var session = await _sessionStore.GetAsync(sessionId, ct)
+            ?? throw PriestException.SessionNotFound(sessionId);
+        var compacted = await CompactAsync(session, config, ct);
+        return (compacted, session.GetCompaction().SummarizedThrough);
+    }
+
+    /// <summary>
+    /// Record a turn's input size as the compaction trigger signal. Skipped when
+    /// the turn replays a tool exchange (its input is inflated by tool context).
+    /// </summary>
+    private static void RecordChatUsage(Session session, PriestRequest request, int? inputTokens)
+    {
+        if (request.ToolExchange.Count > 0) return;
+        session.RecordInputTokens(inputTokens);
+    }
+
+    /// <summary>Compact before a turn when the previous turn's input usage crossed the budget.</summary>
+    private async Task MaybeCompactAsync(Session session, PriestConfig config, CancellationToken ct)
+    {
+        if (_sessionStore is null) return;
+        if (!Compactor.ShouldCompact(session.GetCompaction().LastInputTokens, config.MaxContextTokens)) return;
+        await CompactAsync(session, config, ct);
+    }
+
+    /// <summary>Fold turns into the summary via a provider summarization call; persists the result.</summary>
+    private async Task<bool> CompactAsync(Session session, PriestConfig config, CancellationToken ct)
+    {
+        if (_sessionStore is null) return false;
+        var keepTurns = config.CompactionKeepTurns ?? Compactor.DefaultCompactionKeepTurns;
+        var existing = session.GetCompaction();
+        var plan = Compactor.PlanCompaction(session.Turns, existing.SummarizedThrough, keepTurns);
+        if (plan is null) return false;
+
+        if (!_adapters.TryGetValue(config.Provider, out var adapter))
+            throw PriestException.ProviderNotRegistered(config.Provider);
+
+        var messages = Compactor.BuildSummaryMessages(existing.Summary, plan.ToSummarize);
+        var summaryConfig = new PriestConfig(config.Provider, config.Model)
+        {
+            Timeout = config.Timeout,
+            MaxOutputTokens = config.MaxOutputTokens ?? Compactor.SummaryMaxOutputTokens,
+            ProviderOptions = config.ProviderOptions,
+        };
+        var result = await adapter.CompleteAsync(messages, summaryConfig, new OutputSpec(), null, ct);
+        var summary = (result.Text ?? "").Trim();
+        if (summary.Length == 0) return false;
+
+        session.ApplyCompaction(summary, plan.SummarizedThrough);
+        await _sessionStore.SaveAsync(session, ct);
+        return true;
     }
 
     private async Task<(Session? session, bool isNew)> ResolveSessionAsync(

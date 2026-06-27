@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Priest</RootNamespace>
     <AssemblyName>Priest</AssemblyName>
-    <Version>2.4.0</Version>
+    <Version>2.6.1</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
@@ -14,6 +14,7 @@
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+    <InternalsVisibleTo Include="Priest.Tests" />
   </ItemGroup>
 
 </Project>

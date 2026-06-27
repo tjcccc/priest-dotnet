@@ -33,6 +33,7 @@ public record AdapterStreamEvent(string Type)
     public ToolCall? ToolCall { get; init; }
     public int? InputTokens { get; init; }
     public int? OutputTokens { get; init; }
+    public int? CachedInputTokens { get; init; }
     public string? FinishReason { get; init; }
 }
 

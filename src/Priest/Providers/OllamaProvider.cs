@@ -60,7 +60,7 @@ public class OllamaProvider : IProviderAdapter
             toolCalls is not null ? "tool_calls" : MapDoneReason(data?["done_reason"]?.GetValue<string>()),
             data?["prompt_eval_count"]?.GetValue<int>(),
             data?["eval_count"]?.GetValue<int>(),
-            toolCalls);
+            ToolCalls: toolCalls);
     }
 
     public async IAsyncEnumerable<string> StreamAsync(IList<ChatMessage> messages, PriestConfig config,

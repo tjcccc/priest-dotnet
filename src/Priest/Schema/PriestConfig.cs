@@ -24,6 +24,22 @@ public class PriestConfig
     public int? MaxSystemChars { get; set; }
 
     /// <summary>
+    /// Conversation compaction budget (spec 2.5.0). When set, a chat turn whose
+    /// reported input usage crosses 80% of this budget triggers compaction.
+    /// Null = compaction off (default). Independent of MaxSystemChars.
+    /// </summary>
+    public int? MaxContextTokens { get; set; }
+
+    /// <summary>Most-recent turns kept verbatim when compacting (spec 2.5.0). Default 6.</summary>
+    public int? CompactionKeepTurns { get; set; }
+
+    /// <summary>
+    /// Hard cap on how many recent session turns are replayed (spec 2.6.0).
+    /// 0 replays none (summary only); null replays all (default).
+    /// </summary>
+    public int? SessionContextTurns { get; set; }
+
+    /// <summary>
     /// Provider-specific options merged directly into the request payload.
     /// Examples: { "think": false } for Ollama/Qwen3, { "temperature": 0.7 }.
     /// </summary>
