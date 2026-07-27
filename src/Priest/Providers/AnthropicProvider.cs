@@ -12,6 +12,7 @@ public class AnthropicProvider : IProviderAdapter
 {
     private const string ApiUrl          = "https://api.anthropic.com/v1/messages";
     private const string AnthropicVersion = "2023-06-01";
+    private const string ReasoningFormat = "anthropic.messages.thinking.v1";
     // Spec-defined default (behavior/providers.md): Anthropic requires max_tokens.
     private const int    DefaultMaxTokens = 8096;
 
@@ -63,9 +64,11 @@ public class AnthropicProvider : IProviderAdapter
         var inToks  = node?["usage"]?["input_tokens"]?.GetValue<int>();
         var outToks = node?["usage"]?["output_tokens"]?.GetValue<int>();
         var cachedToks = node?["usage"]?["cache_read_input_tokens"]?.GetValue<int>();
+        var reasoningToks = node?["usage"]?["output_tokens_details"]?["thinking_tokens"]?.GetValue<int>();
+        var reasoning = ParseReasoning(content, toolCalls is not null);
         return new AdapterResult(text,
             toolCalls is not null ? "tool_calls" : MapStopReason(finish),
-            inToks, outToks, cachedToks, toolCalls);
+            inToks, outToks, cachedToks, toolCalls, reasoningToks, reasoning);
     }
 
     public async IAsyncEnumerable<string> StreamAsync(IList<ChatMessage> messages, PriestConfig config,
@@ -114,7 +117,8 @@ public class AnthropicProvider : IProviderAdapter
         var toolBlocks = new Dictionary<int, ToolBlockState>();
         var toolCount = 0;
         string? stopReason = null;
-        int? inputTokens = null, outputTokens = null, cachedInputTokens = null;
+        int? inputTokens = null, outputTokens = null, cachedInputTokens = null, reasoningTokens = null;
+        var thinkingBlocks = new Dictionary<int, JsonObject>();
 
         string? line;
         while ((line = await reader.ReadLineAsync(ct)) is not null)
@@ -144,6 +148,12 @@ public class AnthropicProvider : IProviderAdapter
                         toolBlocks[index.Value] = state;
                         yield return new AdapterStreamEvent("tool_call_start") { Index = state.ToolIndex, Id = state.Id, Name = state.Name };
                     }
+                    else if (index.HasValue
+                        && block is JsonObject blockObject
+                        && block?["type"]?.GetValue<string>() is "thinking" or "redacted_thinking")
+                    {
+                        thinkingBlocks[index.Value] = (JsonObject)blockObject.DeepClone();
+                    }
                     break;
                 }
                 case "content_block_delta":
@@ -155,6 +165,29 @@ public class AnthropicProvider : IProviderAdapter
                         var text = delta?["text"]?.GetValue<string>();
                         if (!string.IsNullOrEmpty(text))
                             yield return new AdapterStreamEvent("text_delta") { Text = text };
+                    }
+                    else if (deltaType == "thinking_delta")
+                    {
+                        var index = node?["index"]?.GetValue<int>();
+                        var thinking = delta?["thinking"]?.GetValue<string>();
+                        if (index.HasValue && thinkingBlocks.TryGetValue(index.Value, out var block)
+                            && !string.IsNullOrEmpty(thinking))
+                        {
+                            var accumulated = block["thinking"]?.GetValue<string>() ?? "";
+                            block["thinking"] = accumulated + thinking;
+                            yield return new AdapterStreamEvent("reasoning_summary_delta") { Text = thinking };
+                        }
+                    }
+                    else if (deltaType == "signature_delta")
+                    {
+                        var index = node?["index"]?.GetValue<int>();
+                        var signature = delta?["signature"]?.GetValue<string>();
+                        if (index.HasValue && thinkingBlocks.TryGetValue(index.Value, out var block)
+                            && !string.IsNullOrEmpty(signature))
+                        {
+                            var accumulated = block["signature"]?.GetValue<string>() ?? "";
+                            block["signature"] = accumulated + signature;
+                        }
                     }
                     else if (deltaType == "input_json_delta")
                     {
@@ -184,15 +217,28 @@ public class AnthropicProvider : IProviderAdapter
                 case "message_delta":
                     stopReason = node?["delta"]?["stop_reason"]?.GetValue<string>() ?? stopReason;
                     outputTokens = node?["usage"]?["output_tokens"]?.GetValue<int>() ?? outputTokens;
+                    reasoningTokens = node?["usage"]?["output_tokens_details"]?["thinking_tokens"]?.GetValue<int>()
+                        ?? reasoningTokens;
                     break;
             }
         }
 
-        if (inputTokens.HasValue || outputTokens.HasValue)
-            yield return new AdapterStreamEvent("usage") { InputTokens = inputTokens, OutputTokens = outputTokens, CachedInputTokens = cachedInputTokens };
+        if (inputTokens.HasValue || outputTokens.HasValue || cachedInputTokens.HasValue || reasoningTokens.HasValue)
+            yield return new AdapterStreamEvent("usage")
+            {
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
+                CachedInputTokens = cachedInputTokens,
+                ReasoningTokens = reasoningTokens,
+            };
+        var reasoning = ParseReasoning(
+            new JsonArray(thinkingBlocks.OrderBy(pair => pair.Key)
+                .Select(pair => (JsonNode?)pair.Value.DeepClone()).ToArray()),
+            toolCount > 0);
         yield return new AdapterStreamEvent("finish")
         {
             FinishReason = toolCount > 0 ? "tool_calls" : MapStopReason(stopReason),
+            Reasoning = reasoning,
         };
     }
 
@@ -211,7 +257,7 @@ public class AnthropicProvider : IProviderAdapter
         return (string.Join("\n\n", systemParts), chat);
     }
 
-    private static JsonObject BuildBody(PriestConfig config, List<ChatMessage> chat, string system,
+    internal static JsonObject BuildBody(PriestConfig config, List<ChatMessage> chat, string system,
         OutputSpec? outputSpec, AdapterCallOptions? options, bool stream)
     {
         var arr = new JsonArray();
@@ -244,6 +290,11 @@ public class AnthropicProvider : IProviderAdapter
             if (m.Role == "assistant" && m.ToolCalls is { Count: > 0 })
             {
                 var blocks = new JsonArray();
+                foreach (var state in m.Reasoning?.Continuation ?? [])
+                {
+                    if (state.Format == ReasoningFormat && state.Value is JsonObject value)
+                        blocks.Add(value.DeepClone());
+                }
                 if (m.Content.Length > 0)
                     blocks.Add(new JsonObject { ["type"] = "text", ["text"] = m.Content });
                 foreach (var call in m.ToolCalls)
@@ -279,6 +330,7 @@ public class AnthropicProvider : IProviderAdapter
             ["stream"]     = stream,
         };
         if (!string.IsNullOrEmpty(systemText)) body["system"] = systemText;
+        ApplyReasoningConfig(body, config);
         if (options?.Tools is { Count: > 0 } tools)
         {
             var toolArr = new JsonArray();
@@ -300,6 +352,73 @@ public class AnthropicProvider : IProviderAdapter
         }
         foreach (var kv in config.ProviderOptions) body[kv.Key] = kv.Value?.DeepClone();
         return body;
+    }
+
+    private static void ApplyReasoningConfig(JsonObject body, PriestConfig config)
+    {
+        var reasoning = config.Reasoning;
+        if (reasoning is null) return;
+
+        var disabled = reasoning.Enabled == false || reasoning.Effort == ReasoningEffort.None;
+        var needsThinking = reasoning.Enabled == true
+            || reasoning.Effort.HasValue
+            || reasoning.Summary.HasValue;
+
+        if (disabled)
+        {
+            body["thinking"] = new JsonObject { ["type"] = "disabled" };
+        }
+        else if (needsThinking)
+        {
+            var thinking = new JsonObject { ["type"] = "adaptive" };
+            if (reasoning.Summary == ReasoningSummaryMode.Auto) thinking["display"] = "summarized";
+            if (reasoning.Summary == ReasoningSummaryMode.None) thinking["display"] = "omitted";
+            body["thinking"] = thinking;
+        }
+
+        if (reasoning.Effort.HasValue && reasoning.Effort != ReasoningEffort.None)
+        {
+            body["output_config"] = new JsonObject
+            {
+                ["effort"] = ReasoningEffortValue(reasoning.Effort.Value),
+            };
+        }
+    }
+
+    private static string ReasoningEffortValue(ReasoningEffort effort) => effort switch
+    {
+        ReasoningEffort.None => "none",
+        ReasoningEffort.Minimal => "minimal",
+        ReasoningEffort.Low => "low",
+        ReasoningEffort.Medium => "medium",
+        ReasoningEffort.High => "high",
+        ReasoningEffort.XHigh => "xhigh",
+        ReasoningEffort.Max => "max",
+        _ => throw new ArgumentOutOfRangeException(nameof(effort)),
+    };
+
+    private static ReasoningInfo? ParseReasoning(JsonArray? content, bool includeContinuation)
+    {
+        if (content is null) return null;
+
+        var summaries = new List<string>();
+        var continuation = new List<OpaqueReasoningState>();
+        foreach (var block in content.OfType<JsonObject>())
+        {
+            var type = block["type"]?.GetValue<string>();
+            if (type is not ("thinking" or "redacted_thinking")) continue;
+
+            if (type == "thinking"
+                && block["thinking"]?.GetValue<string>() is { Length: > 0 } summary)
+                summaries.Add(summary);
+            if (includeContinuation)
+                continuation.Add(new OpaqueReasoningState(ReasoningFormat, block.DeepClone()));
+        }
+
+        if (summaries.Count == 0 && continuation.Count == 0) return null;
+        return new ReasoningInfo(
+            summaries.Count > 0 ? string.Join("\n\n", summaries) : null,
+            continuation.Count > 0 ? continuation : null);
     }
 
     private static List<ToolCall>? ParseToolUseBlocks(JsonArray? content)

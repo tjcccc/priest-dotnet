@@ -1,5 +1,15 @@
 # DEVLOG
 
+## 2026-07-27 — v2.8.0 — OpenAI Responses and provider-neutral reasoning
+
+Synced the TypeScript reference and canonical protocol 2.8.0 behavior without changing the SQLite schema, timestamp representation, session persistence, or existing OpenAI-compatible Chat Completions adapter.
+
+- Added `OpenAIResponsesProvider` with configurable base/exact URL, headers, and host-owned `HttpClient`; stateless message/tool continuation; JSON output formats; function tools; semantic SSE; finish/error normalization; and duplicate tool-terminal suppression.
+- Added `ReasoningConfig`, safe `ReasoningInfo` summaries, opaque request-local continuation state, `reasoning_summary_delta`, `UsageInfo.ReasoningTokens`, and `FinishedReason.ContentFilter`.
+- Mapped neutral reasoning controls to OpenAI Responses, Anthropic, and Ollama. Raw Ollama traces and raw Responses reasoning content are never surfaced. `ToolLoop` carries recognized opaque state between tool iterations; durable sessions remain text-only.
+- Added focused v2.8 wire, safety, streaming, usage, and tool-loop regression coverage. `dotnet test Priest.slnx --no-restore`: 79 passed.
+- Known pre-existing gap: the .NET common request model still does not implement protocol image inputs.
+
 ## 2026-06-27 — v2.6.1 — full spec sync (compaction, turn window, cached tokens, streaming usage)
 
 Brings Priest to full parity with the spec at v2.6.1 (2.5.0 → 2.6.0 → 2.6.1), mirroring the priest-core/priest-typescript reference. All additions are off/opt-in by default; the SQLite schema is unchanged, so pre-2.5 sessions remain interoperable.

@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 namespace Priest.Schema;
 
-public enum FinishedReason { Stop, Length, ToolCalls, Error, Unknown }
+public enum FinishedReason { Stop, Length, ContentFilter, ToolCalls, Error, Unknown }
 
 /// <summary>Execution metadata for a completed run.</summary>
 public record ExecutionInfo(
@@ -18,7 +18,8 @@ public record UsageInfo(
     int? OutputTokens,
     int? TotalTokens,
     int? CachedInputTokens,
-    double? EstimatedCostUsd);
+    double? EstimatedCostUsd,
+    int? ReasoningTokens = null);
 
 /// <summary>Session state after a run.</summary>
 public record SessionInfo(
@@ -48,6 +49,9 @@ public class PriestResponse
     /// re-runs with the results appended to PriestRequest.ToolExchange.
     /// </summary>
     public IList<ToolCall>? ToolCalls { get; init; }
+
+    /// <summary>Provider-supplied summary and request-local opaque continuation state.</summary>
+    public ReasoningInfo? Reasoning { get; init; }
 
     public ExecutionInfo Execution { get; init; }
     public UsageInfo? Usage { get; init; }

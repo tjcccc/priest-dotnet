@@ -4,7 +4,8 @@ namespace Priest.Engine;
 
 /// <summary>
 /// Engine-level structured streaming event (spec 2.4.0). Type is one of:
-/// text_delta, tool_call_start, tool_call_delta, tool_call_end, usage, done.
+/// text_delta, reasoning_summary_delta, tool_call_start, tool_call_delta,
+/// tool_call_end, usage, done.
 /// The terminal event is always "done" carrying the full PriestResponse.
 /// </summary>
 public record PriestStreamEvent(string Type)

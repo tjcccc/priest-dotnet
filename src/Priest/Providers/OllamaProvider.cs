@@ -147,7 +147,7 @@ public class OllamaProvider : IProviderAdapter
         }
     }
 
-    private static JsonObject BuildBody(IList<ChatMessage> messages, PriestConfig config,
+    internal static JsonObject BuildBody(IList<ChatMessage> messages, PriestConfig config,
         OutputSpec? outputSpec, AdapterCallOptions? options, bool stream)
     {
         var body = new JsonObject
@@ -160,6 +160,7 @@ public class OllamaProvider : IProviderAdapter
         else if (outputSpec?.ProviderFormat == Schema.ProviderFormat.Json) body["format"] = "json";
         if (config.MaxOutputTokens.HasValue)
             body["options"] = new JsonObject { ["num_predict"] = config.MaxOutputTokens.Value };
+        ApplyReasoningConfig(body, config);
         if (options?.Tools is { Count: > 0 } tools)
         {
             // Ollama accepts OpenAI-shaped tools; it has no tool_choice parameter.
@@ -180,6 +181,44 @@ public class OllamaProvider : IProviderAdapter
         foreach (var kv in config.ProviderOptions) body[kv.Key] = kv.Value?.DeepClone();
         return body;
     }
+
+    private static void ApplyReasoningConfig(JsonObject body, PriestConfig config)
+    {
+        var reasoning = config.Reasoning;
+        if (reasoning is null) return;
+
+        if (reasoning.Enabled == false || reasoning.Effort == ReasoningEffort.None)
+        {
+            body["think"] = false;
+            return;
+        }
+
+        if (reasoning.Effort is ReasoningEffort.Minimal or ReasoningEffort.XHigh)
+        {
+            var effort = ReasoningEffortValue(reasoning.Effort.Value);
+            throw new PriestException(
+                PriestErrorCode.RequestInvalid,
+                $"Ollama does not define the reasoning effort '{effort}'",
+                new() { ["provider"] = "ollama", ["effort"] = effort });
+        }
+
+        if (reasoning.Effort.HasValue)
+            body["think"] = ReasoningEffortValue(reasoning.Effort.Value);
+        else if (reasoning.Enabled == true)
+            body["think"] = true;
+    }
+
+    private static string ReasoningEffortValue(ReasoningEffort effort) => effort switch
+    {
+        ReasoningEffort.None => "none",
+        ReasoningEffort.Minimal => "minimal",
+        ReasoningEffort.Low => "low",
+        ReasoningEffort.Medium => "medium",
+        ReasoningEffort.High => "high",
+        ReasoningEffort.XHigh => "xhigh",
+        ReasoningEffort.Max => "max",
+        _ => throw new ArgumentOutOfRangeException(nameof(effort)),
+    };
 
     private static JsonArray BuildMessages(IList<ChatMessage> messages)
     {

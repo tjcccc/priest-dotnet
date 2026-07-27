@@ -11,7 +11,8 @@ public record ChatMessage(
     string Content,
     IList<ToolCall>? ToolCalls = null,
     string? ToolCallId = null,
-    string? Name = null);
+    string? Name = null,
+    ReasoningInfo? Reasoning = null);
 
 /// <summary>Per-call options threaded from the engine into adapters (spec 2.4.0).</summary>
 public record AdapterCallOptions(
@@ -34,7 +35,9 @@ public record AdapterStreamEvent(string Type)
     public int? InputTokens { get; init; }
     public int? OutputTokens { get; init; }
     public int? CachedInputTokens { get; init; }
+    public int? ReasoningTokens { get; init; }
     public string? FinishReason { get; init; }
+    public ReasoningInfo? Reasoning { get; init; }
 }
 
 /// <summary>Interface that all provider adapters must implement.</summary>

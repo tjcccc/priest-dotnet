@@ -39,6 +39,9 @@ public class PriestConfig
     /// </summary>
     public int? SessionContextTurns { get; set; }
 
+    /// <summary>Provider-neutral reasoning request. Null preserves provider/model defaults.</summary>
+    public ReasoningConfig? Reasoning { get; set; }
+
     /// <summary>
     /// Provider-specific options merged directly into the request payload.
     /// Examples: { "think": false } for Ollama/Qwen3, { "temperature": 0.7 }.

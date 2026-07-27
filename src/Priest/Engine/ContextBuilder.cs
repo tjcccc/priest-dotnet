@@ -126,7 +126,11 @@ public static class ContextBuilder
                 switch (turn)
                 {
                     case AssistantToolTurn assistant:
-                        messages.Add(new ChatMessage("assistant", assistant.Text ?? "", ToolCalls: assistant.ToolCalls));
+                        messages.Add(new ChatMessage(
+                            "assistant",
+                            assistant.Text ?? "",
+                            ToolCalls: assistant.ToolCalls,
+                            Reasoning: assistant.Reasoning));
                         break;
                     case ToolResultTurn result:
                         messages.Add(new ChatMessage("tool", result.Content, ToolCallId: result.ToolCallId, Name: result.Name));

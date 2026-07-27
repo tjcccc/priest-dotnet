@@ -12,12 +12,12 @@ namespace Priest.Engine;
 ///
 /// The engine is stateless per-run — it holds no mutable state between calls.
 ///
-/// Spec version this implementation targets: 1.0.0
+/// Spec version this implementation targets: 2.8.0
 /// </summary>
 public class PriestEngine
 {
     /// <summary>Spec version this implementation targets.</summary>
-    public const string SpecVersion = "2.6.1";
+    public const string SpecVersion = "2.8.0";
 
     private readonly IProfileLoader _profileLoader;
     private readonly ISessionStore? _sessionStore;
@@ -59,8 +59,9 @@ public class PriestEngine
 
         string? text = null;
         IList<ToolCall>? toolCalls = null;
+        ReasoningInfo? reasoning = null;
         string? finishReason = null;
-        int? inputTokens = null, outputTokens = null, cachedInputTokens = null;
+        int? inputTokens = null, outputTokens = null, cachedInputTokens = null, reasoningTokens = null;
         PriestErrorModel? errorModel = null;
 
         try
@@ -72,6 +73,8 @@ public class PriestEngine
             inputTokens  = result.InputTokens;
             outputTokens = result.OutputTokens;
             cachedInputTokens = result.CachedInputTokens;
+            reasoningTokens = result.ReasoningTokens;
+            reasoning = result.Reasoning;
             if (toolCalls is not null) finishReason = "tool_calls";
         }
         catch (PriestException ex)
@@ -102,7 +105,7 @@ public class PriestEngine
 
         var latencyMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - startMs;
 
-        var usage = BuildUsage(inputTokens, outputTokens, cachedInputTokens);
+        var usage = BuildUsage(inputTokens, outputTokens, cachedInputTokens, reasoningTokens);
 
         var finishedReason = MapFinishedReason(finishReason);
 
@@ -113,6 +116,7 @@ public class PriestEngine
         {
             Text      = text,
             ToolCalls = toolCalls,
+            Reasoning = reasoning,
             Usage     = usage,
             Session   = sessionInfo,
             Error     = errorModel,
@@ -167,8 +171,9 @@ public class PriestEngine
 
         var textParts = new List<string>();
         var toolCalls = new List<ToolCall>();
+        ReasoningInfo? reasoning = null;
         string? finishReason = null;
-        int? inputTokens = null, outputTokens = null, cachedInputTokens = null;
+        int? inputTokens = null, outputTokens = null, cachedInputTokens = null, reasoningTokens = null;
         PriestErrorModel? errorModel = null;
 
         var source = adapter.StreamEventsAsync(messages, request.Config, request.Output, CallOptions(request), ct);
@@ -200,6 +205,9 @@ public class PriestEngine
                     textParts.Add(ev.Text);
                     yield return new PriestStreamEvent("text_delta") { Text = ev.Text };
                     break;
+                case "reasoning_summary_delta" when ev.Text is not null:
+                    yield return new PriestStreamEvent("reasoning_summary_delta") { Text = ev.Text };
+                    break;
                 case "tool_call_start":
                     yield return new PriestStreamEvent("tool_call_start") { Index = ev.Index, Id = ev.Id, Name = ev.Name };
                     break;
@@ -214,10 +222,15 @@ public class PriestEngine
                     inputTokens = ev.InputTokens ?? inputTokens;
                     outputTokens = ev.OutputTokens ?? outputTokens;
                     cachedInputTokens = ev.CachedInputTokens ?? cachedInputTokens;
-                    yield return new PriestStreamEvent("usage") { Usage = BuildUsage(inputTokens, outputTokens, cachedInputTokens) };
+                    reasoningTokens = ev.ReasoningTokens ?? reasoningTokens;
+                    yield return new PriestStreamEvent("usage")
+                    {
+                        Usage = BuildUsage(inputTokens, outputTokens, cachedInputTokens, reasoningTokens),
+                    };
                     break;
                 case "finish":
                     finishReason = ev.FinishReason ?? finishReason;
+                    reasoning = ev.Reasoning ?? reasoning;
                     break;
             }
         }
@@ -246,7 +259,8 @@ public class PriestEngine
         {
             Text      = text,
             ToolCalls = toolCalls.Count > 0 ? toolCalls : null,
-            Usage     = BuildUsage(inputTokens, outputTokens, cachedInputTokens),
+            Reasoning = reasoning,
+            Usage     = BuildUsage(inputTokens, outputTokens, cachedInputTokens, reasoningTokens),
             Session   = sessionInfo,
             Error     = errorModel,
         };
@@ -261,17 +275,29 @@ public class PriestEngine
     {
         "stop"       => FinishedReason.Stop,
         "length"     => FinishedReason.Length,
+        "content_filter" => FinishedReason.ContentFilter,
         "tool_calls" => FinishedReason.ToolCalls,
         "error"      => FinishedReason.Error,
         not null     => FinishedReason.Unknown,
         _            => null,
     };
 
-    private static UsageInfo? BuildUsage(int? inputTokens, int? outputTokens, int? cachedInputTokens = null)
+    private static UsageInfo? BuildUsage(
+        int? inputTokens,
+        int? outputTokens,
+        int? cachedInputTokens = null,
+        int? reasoningTokens = null)
     {
-        if (!inputTokens.HasValue && !outputTokens.HasValue) return null;
+        if (!inputTokens.HasValue && !outputTokens.HasValue
+            && !cachedInputTokens.HasValue && !reasoningTokens.HasValue) return null;
         var total = (inputTokens ?? 0) + (outputTokens ?? 0);
-        return new(inputTokens, outputTokens, total > 0 ? total : null, cachedInputTokens, null);
+        return new(
+            inputTokens,
+            outputTokens,
+            total > 0 ? total : null,
+            cachedInputTokens,
+            null,
+            reasoningTokens);
     }
 
     // ---- Conversation compaction (spec 2.5.0) ----

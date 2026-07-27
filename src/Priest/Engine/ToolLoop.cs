@@ -52,7 +52,7 @@ public static class ToolLoop
             if (!response.Ok || response.ToolCalls is not { Count: > 0 } calls)
                 return new ToolLoopResult(response, exchange, false);
 
-            exchange.Add(new AssistantToolTurn(response.Text, calls));
+            exchange.Add(new AssistantToolTurn(response.Text, calls, response.Reasoning));
             foreach (var call in calls)
             {
                 var decision = onToolCall is not null ? await onToolCall(call) : new ApprovalDecision(true);

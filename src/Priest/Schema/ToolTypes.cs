@@ -47,8 +47,11 @@ public record ToolCall(string Id, string Name, JsonObject Arguments);
 /// </summary>
 public abstract record ToolExchangeTurn;
 
-/// <summary>Assistant turn carrying tool calls, replayed in the exchange.</summary>
-public record AssistantToolTurn(string? Text, IList<ToolCall> ToolCalls) : ToolExchangeTurn;
+/// <summary>Assistant turn carrying tool calls and request-local reasoning state.</summary>
+public record AssistantToolTurn(
+    string? Text,
+    IList<ToolCall> ToolCalls,
+    ReasoningInfo? Reasoning = null) : ToolExchangeTurn;
 
 /// <summary>Result of one executed tool call, replayed in the exchange.</summary>
 public record ToolResultTurn(string ToolCallId, string Name, string Content, bool IsError = false) : ToolExchangeTurn;

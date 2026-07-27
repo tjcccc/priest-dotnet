@@ -8,7 +8,7 @@ C# / .NET SDK for the [priest](https://github.com/tjcccc/priest) AI orchestratio
 
 ## Overview
 
-`Priest` is a .NET class library that implements the priest protocol spec v2.6.1 natively — no Python server, no FFI. It is designed for .NET backends, Unity games, Godot projects, and any C# host that needs to talk to a local or remote AI provider.
+`Priest` is a .NET class library that implements the priest protocol spec v2.8.0 natively — no Python server, no FFI. It is designed for .NET backends, Unity games, Godot projects, and any C# host that needs to talk to a local or remote AI provider.
 
 The core API is two methods on `PriestEngine`:
 
@@ -66,7 +66,7 @@ await foreach (var chunk in engine.StreamAsync(new PriestRequest(
 }
 ```
 
-### Anthropic or OpenAI-compatible providers
+### Anthropic, OpenAI Responses, or OpenAI-compatible providers
 
 ```csharp
 var engine = new PriestEngine(
@@ -74,6 +74,7 @@ var engine = new PriestEngine(
     adapters: new Dictionary<string, IProviderAdapter>
     {
         ["anthropic"] = new AnthropicProvider("sk-ant-..."),
+        ["responses"]  = new OpenAIResponsesProvider(apiKey: "sk-..."),
         ["openai"]    = new OpenAICompatProvider("https://api.openai.com", "sk-..."),
     }
 );
@@ -233,6 +234,30 @@ var response = await engine.RunAsync(new PriestRequest(config, "Give me a person
 
 ---
 
+## Reasoning
+
+Protocol v2.8 adds provider-neutral reasoning controls and safe, provider-supplied summaries:
+
+```csharp
+var config = new PriestConfig("responses", "gpt-5")
+{
+    Reasoning = new ReasoningConfig
+    {
+        Enabled = true,
+        Effort = ReasoningEffort.Medium,
+        Summary = ReasoningSummaryMode.Auto,
+    },
+};
+
+var response = await engine.RunAsync(new PriestRequest(config, "Solve this."));
+Console.WriteLine(response.Reasoning?.Summary);
+Console.WriteLine(response.Usage?.ReasoningTokens);
+```
+
+`StreamEventsAsync()` emits `reasoning_summary_delta` events. Plain `StreamAsync()` continues to yield answer text only. Opaque continuation state is copied automatically by `ToolLoop`, used only for the current provider tool loop, and never persisted in sessions. Priest never exposes private chain-of-thought.
+
+---
+
 ## Error Handling
 
 Two errors are always thrown and never captured into `response.Error`:
@@ -268,6 +293,7 @@ catch (PriestException ex)
 |-----|-------|-------|
 | any | `OllamaProvider` | NDJSON streaming; local by default (`http://localhost:11434`) |
 | any | `AnthropicProvider` | SSE streaming; requires API key |
+| any | `OpenAIResponsesProvider` | First-class Responses API; SSE, reasoning, and stateless tool continuation |
 | any | `OpenAICompatProvider` | SSE streaming; works with any OpenAI-compatible endpoint |
 
 Provider keys are arbitrary strings — the key you register in the `adapters` dictionary must match the `Provider` field in `PriestConfig`.
@@ -306,10 +332,10 @@ public class MyProvider : IProviderAdapter
 
 ## Spec
 
-`Priest` targets priest protocol spec **v2.6.1**. The spec lives in the [`priest`](https://github.com/tjcccc/priest) repository under `spec/`.
+`Priest` targets priest protocol spec **v2.8.0**. The spec lives in the [`priest`](https://github.com/tjcccc/priest) repository under `spec/`.
 
 ```csharp
-PriestEngine.SpecVersion  // "2.3.0"
+PriestEngine.SpecVersion  // "2.8.0"
 ```
 
 ---
