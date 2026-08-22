@@ -1,14 +1,17 @@
 # DEVLOG
 
-## 2026-08-22 — v2.8.1 — OpenAI Responses assistant-history replay
+## 2026-08-22 — v2.8.1 — Responses replay and SQLite security update
 
 - Corrected Responses request serialization so prior assistant text uses
   `output_text`; system and user messages continue to use `input_text`.
 - Added a regression covering system/user/assistant/user replay and advanced
   the package and declared protocol version to `2.8.1`.
+- Updated `Microsoft.Data.Sqlite` from 8.0.0 to 8.0.30, advancing the bundled
+  `SQLitePCLRaw` native library beyond the versions affected by
+  GHSA-2m69-gcr7-jv3q.
 - Session persistence, schemas, and the OpenAI-compatible adapter are unchanged.
-- Verification: `dotnet test Priest.slnx` passes 80 tests, and `dotnet pack`
-  creates `Priest.2.8.1.nupkg`.
+- Verification: the transitive vulnerability audit is clean, all 80 tests
+  pass, and `dotnet pack` creates `Priest.2.8.1.nupkg` without `NU1903`.
 
 ## 2026-07-27 — v2.8.0 — OpenAI Responses and provider-neutral reasoning
 
