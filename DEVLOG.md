@@ -1,5 +1,15 @@
 # DEVLOG
 
+## 2026-08-22 — v2.8.1 — OpenAI Responses assistant-history replay
+
+- Corrected Responses request serialization so prior assistant text uses
+  `output_text`; system and user messages continue to use `input_text`.
+- Added a regression covering system/user/assistant/user replay and advanced
+  the package and declared protocol version to `2.8.1`.
+- Session persistence, schemas, and the OpenAI-compatible adapter are unchanged.
+- Verification: `dotnet test Priest.slnx` passes 80 tests, and `dotnet pack`
+  creates `Priest.2.8.1.nupkg`.
+
 ## 2026-07-27 — v2.8.0 — OpenAI Responses and provider-neutral reasoning
 
 Synced the TypeScript reference and canonical protocol 2.8.0 behavior without changing the SQLite schema, timestamp representation, session persistence, or existing OpenAI-compatible Chat Completions adapter.

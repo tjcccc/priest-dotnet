@@ -502,7 +502,11 @@ public class OpenAIResponsesProvider : IProviderAdapter
                 ["role"] = message.Role,
                 ["content"] = new JsonArray
                 {
-                    new JsonObject { ["type"] = "input_text", ["text"] = message.Content },
+                    new JsonObject
+                    {
+                        ["type"] = message.Role == "assistant" ? "output_text" : "input_text",
+                        ["text"] = message.Content,
+                    },
                 },
             });
         }

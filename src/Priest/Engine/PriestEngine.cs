@@ -12,12 +12,12 @@ namespace Priest.Engine;
 ///
 /// The engine is stateless per-run — it holds no mutable state between calls.
 ///
-/// Spec version this implementation targets: 2.8.0
+/// Spec version this implementation targets: 2.8.1
 /// </summary>
 public class PriestEngine
 {
     /// <summary>Spec version this implementation targets.</summary>
-    public const string SpecVersion = "2.8.0";
+    public const string SpecVersion = "2.8.1";
 
     private readonly IProfileLoader _profileLoader;
     private readonly ISessionStore? _sessionStore;

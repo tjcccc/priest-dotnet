@@ -12,9 +12,9 @@ public class Protocol28Tests
     private static readonly PriestConfig Config = new("mock", "reasoning-model");
 
     [Fact]
-    public void SpecVersionIs280()
+    public void SpecVersionIs281()
     {
-        Assert.Equal("2.8.0", PriestEngine.SpecVersion);
+        Assert.Equal("2.8.1", PriestEngine.SpecVersion);
     }
 
     [Fact]
@@ -98,6 +98,28 @@ public class Protocol28Tests
         Assert.Equal("function_call", input[1]!["type"]!.GetValue<string>());
         Assert.Equal("""{"id":"42"}""", input[1]!["arguments"]!.GetValue<string>());
         Assert.Equal("function_call_output", input[2]!["type"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ResponsesHistoryUsesOutputTextForAssistantTurns()
+    {
+        var input = OpenAIResponsesProvider.BuildBody(
+            new List<ChatMessage>
+            {
+                new("system", "Be concise."),
+                new("user", "First question."),
+                new("assistant", "First answer."),
+                new("user", "Second question."),
+            },
+            new PriestConfig("responses", "gpt-test"),
+            null,
+            null,
+            false)["input"]!.AsArray();
+
+        Assert.Equal("input_text", input[0]!["content"]![0]!["type"]!.GetValue<string>());
+        Assert.Equal("input_text", input[1]!["content"]![0]!["type"]!.GetValue<string>());
+        Assert.Equal("output_text", input[2]!["content"]![0]!["type"]!.GetValue<string>());
+        Assert.Equal("input_text", input[3]!["content"]![0]!["type"]!.GetValue<string>());
     }
 
     [Fact]
