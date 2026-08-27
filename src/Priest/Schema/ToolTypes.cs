@@ -13,6 +13,12 @@ public record ToolDefinition(
     /// <summary>JSON Schema object describing the tool's parameters.</summary>
     JsonObject? Parameters = null);
 
+/// <summary>A tool executed entirely by the model provider (spec 2.9.0).</summary>
+public sealed record ProviderToolDefinition(string Type)
+{
+    public static ProviderToolDefinition WebSearch { get; } = new("web_search");
+}
+
 /// <summary>
 /// Tool selection behavior: Auto lets the model decide, None disables calls,
 /// Required forces a call, and Tool(name) forces a specific tool.

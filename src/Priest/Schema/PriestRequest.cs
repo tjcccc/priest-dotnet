@@ -35,6 +35,12 @@ public class PriestRequest
     /// <summary>Tools the model may call. The caller executes them; the library transports.</summary>
     public IList<ToolDefinition> Tools { get; set; } = Array.Empty<ToolDefinition>();
 
+    /// <summary>
+    /// Tools executed entirely by the model provider. They do not enter the
+    /// caller's tool loop or produce ToolCall values.
+    /// </summary>
+    public IList<ProviderToolDefinition> ProviderTools { get; set; } = Array.Empty<ProviderToolDefinition>();
+
     /// <summary>Tool selection behavior. Only meaningful when Tools is non-empty.</summary>
     public ToolChoice? ToolChoice { get; set; }
 

@@ -12,12 +12,12 @@ namespace Priest.Engine;
 ///
 /// The engine is stateless per-run — it holds no mutable state between calls.
 ///
-/// Spec version this implementation targets: 2.8.1
+/// Spec version this implementation targets: 2.9.0
 /// </summary>
 public class PriestEngine
 {
     /// <summary>Spec version this implementation targets.</summary>
-    public const string SpecVersion = "2.8.1";
+    public const string SpecVersion = "2.9.0";
 
     private readonly IProfileLoader _profileLoader;
     private readonly ISessionStore? _sessionStore;
@@ -66,6 +66,7 @@ public class PriestEngine
 
         try
         {
+            AssertProviderToolsSupported(adapter, request);
             var result = await adapter.CompleteAsync(messages, request.Config, request.Output, CallOptions(request), ct);
             text         = result.Text;
             toolCalls    = result.ToolCalls is { Count: > 0 } ? result.ToolCalls : null;
@@ -176,7 +177,7 @@ public class PriestEngine
         int? inputTokens = null, outputTokens = null, cachedInputTokens = null, reasoningTokens = null;
         PriestErrorModel? errorModel = null;
 
-        var source = adapter.StreamEventsAsync(messages, request.Config, request.Output, CallOptions(request), ct);
+        var source = ValidatedStreamEvents(adapter, request, messages, ct);
         await using var enumerator = source.GetAsyncEnumerator(ct);
         while (true)
         {
@@ -269,7 +270,40 @@ public class PriestEngine
     }
 
     private static AdapterCallOptions? CallOptions(PriestRequest request)
-        => request.Tools.Count > 0 ? new AdapterCallOptions(request.Tools, request.ToolChoice) : null;
+        => request.Tools.Count > 0 || request.ProviderTools.Count > 0
+            ? new AdapterCallOptions(request.Tools, request.ToolChoice, request.ProviderTools)
+            : null;
+
+    private static void AssertProviderToolsSupported(
+        IProviderAdapter adapter,
+        PriestRequest request)
+    {
+        foreach (var tool in request.ProviderTools)
+        {
+            if (adapter.SupportsProviderTool(tool, request.Config)) continue;
+            throw PriestException.ProviderError(
+                request.Config.Provider,
+                $"Provider tool '{tool.Type}' is not supported for model '{request.Config.Model}'.");
+        }
+    }
+
+    private static async IAsyncEnumerable<AdapterStreamEvent> ValidatedStreamEvents(
+        IProviderAdapter adapter,
+        PriestRequest request,
+        IList<ChatMessage> messages,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        AssertProviderToolsSupported(adapter, request);
+        await foreach (var item in adapter.StreamEventsAsync(
+            messages,
+            request.Config,
+            request.Output,
+            CallOptions(request),
+            ct).WithCancellation(ct))
+        {
+            yield return item;
+        }
+    }
 
     private static FinishedReason? MapFinishedReason(string? finishReason) => finishReason switch
     {

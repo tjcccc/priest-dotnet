@@ -12,12 +12,6 @@ public class Protocol28Tests
     private static readonly PriestConfig Config = new("mock", "reasoning-model");
 
     [Fact]
-    public void SpecVersionIs281()
-    {
-        Assert.Equal("2.8.1", PriestEngine.SpecVersion);
-    }
-
-    [Fact]
     public void ResponsesBodyMapsReasoningToolsSchemaAndProtectsInvariants()
     {
         var config = new PriestConfig("responses", "gpt-test")

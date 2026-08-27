@@ -17,7 +17,8 @@ public record ChatMessage(
 /// <summary>Per-call options threaded from the engine into adapters (spec 2.4.0).</summary>
 public record AdapterCallOptions(
     IList<ToolDefinition>? Tools = null,
-    ToolChoice? ToolChoice = null);
+    ToolChoice? ToolChoice = null,
+    IList<ProviderToolDefinition>? ProviderTools = null);
 
 /// <summary>
 /// One structured streaming event from an adapter (spec 2.4.0). Type is one
@@ -43,6 +44,12 @@ public record AdapterStreamEvent(string Type)
 /// <summary>Interface that all provider adapters must implement.</summary>
 public interface IProviderAdapter
 {
+    /// <summary>
+    /// Whether this adapter can execute the provider-owned tool for the
+    /// selected model/configuration. The default supports none.
+    /// </summary>
+    bool SupportsProviderTool(ProviderToolDefinition tool, PriestConfig config) => false;
+
     /// <summary>Execute a request and return the full response.</summary>
     Task<AdapterResult> CompleteAsync(IList<ChatMessage> messages, PriestConfig config,
         OutputSpec? outputSpec = null, AdapterCallOptions? options = null, CancellationToken ct = default);

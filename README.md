@@ -8,7 +8,7 @@ C# / .NET SDK for the [priest](https://github.com/tjcccc/priest) AI orchestratio
 
 ## Overview
 
-`Priest` is a .NET class library that implements the priest protocol spec v2.8.1 natively — no Python server, no FFI. It is designed for .NET backends, Unity games, Godot projects, and any C# host that needs to talk to a local or remote AI provider.
+`Priest` is a .NET class library that implements the priest protocol spec v2.9.0 natively — no Python server, no FFI. It is designed for .NET backends, Unity games, Godot projects, and any C# host that needs to talk to a local or remote AI provider.
 
 The core API is two methods on `PriestEngine`:
 
@@ -234,6 +234,23 @@ var response = await engine.RunAsync(new PriestRequest(config, "Give me a person
 
 ---
 
+## Provider-executed tools
+
+Provider-owned tools are separate from caller-executed function tools. OpenAI
+Responses supports hosted web search:
+
+```csharp
+var request = new PriestRequest(config, "What changed today?")
+{
+    ProviderTools = new[] { ProviderToolDefinition.WebSearch },
+};
+var response = await engine.RunAsync(request);
+```
+
+Hosted tools return ordinary final text and never enter `ToolExchange`.
+Unsupported provider/model combinations return `PROVIDER_ERROR` rather than
+silently dropping the requested capability.
+
 ## Reasoning
 
 Protocol v2.8 adds provider-neutral reasoning controls and safe, provider-supplied summaries:
@@ -332,10 +349,10 @@ public class MyProvider : IProviderAdapter
 
 ## Spec
 
-`Priest` targets priest protocol spec **v2.8.1**. The spec lives in the [`priest`](https://github.com/tjcccc/priest) repository under `spec/`.
+`Priest` targets priest protocol spec **v2.9.0**. The spec lives in the [`priest`](https://github.com/tjcccc/priest) repository under `spec/`.
 
 ```csharp
-PriestEngine.SpecVersion  // "2.8.1"
+PriestEngine.SpecVersion  // "2.9.0"
 ```
 
 ---

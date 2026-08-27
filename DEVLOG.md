@@ -1,5 +1,18 @@
 # DEVLOG
 
+## 2026-08-27 — v2.9.0 — Provider-executed web search
+
+- Added `PriestRequest.ProviderTools` and
+  `ProviderToolDefinition.WebSearch` separately from caller-executed tools.
+- Added default-deny adapter capability checks and clear `PROVIDER_ERROR`
+  responses for unsupported provider/model combinations.
+- OpenAI Responses maps hosted web search before coexisting function tools;
+  provider tools never enter the caller tool loop.
+- Session persistence, compaction state, and SQLite interoperability are
+  unchanged; no migration is required.
+- Verification: all 81 tests pass, and `dotnet pack` creates
+  `Priest.2.9.0.nupkg`.
+
 ## 2026-08-22 — v2.8.1 — Responses replay and SQLite security update
 
 - Corrected Responses request serialization so prior assistant text uses

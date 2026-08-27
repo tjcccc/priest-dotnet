@@ -41,6 +41,9 @@ public class OpenAIResponsesProvider : IProviderAdapter
         _http = httpClient ?? DefaultHttpClient;
     }
 
+    public bool SupportsProviderTool(ProviderToolDefinition tool, PriestConfig config)
+        => tool.Type == ProviderToolDefinition.WebSearch.Type;
+
     public async Task<AdapterResult> CompleteAsync(
         IList<ChatMessage> messages,
         PriestConfig config,
@@ -363,21 +366,25 @@ public class OpenAIResponsesProvider : IProviderAdapter
             };
         }
 
-        if (options?.Tools is { Count: > 0 } tools)
+        var toolArray = new JsonArray();
+        foreach (var tool in options?.ProviderTools ?? Array.Empty<ProviderToolDefinition>())
         {
-            var toolArray = new JsonArray();
-            foreach (var tool in tools)
+            toolArray.Add(new JsonObject { ["type"] = tool.Type });
+        }
+        foreach (var tool in options?.Tools ?? Array.Empty<ToolDefinition>())
+        {
+            toolArray.Add(new JsonObject
             {
-                toolArray.Add(new JsonObject
-                {
-                    ["type"] = "function",
-                    ["name"] = tool.Name,
-                    ["description"] = tool.Description ?? "",
-                    ["parameters"] = tool.Parameters?.DeepClone() ?? new JsonObject(),
-                });
-            }
+                ["type"] = "function",
+                ["name"] = tool.Name,
+                ["description"] = tool.Description ?? "",
+                ["parameters"] = tool.Parameters?.DeepClone() ?? new JsonObject(),
+            });
+        }
+        if (toolArray.Count > 0)
+        {
             body["tools"] = toolArray;
-            if (options.ToolChoice is { } choice)
+            if (options?.ToolChoice is { } choice)
             {
                 body["tool_choice"] = choice.Name is not null
                     ? new JsonObject { ["type"] = "function", ["name"] = choice.Name }
